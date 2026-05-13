@@ -1,0 +1,128 @@
+:root {
+  --bg:       #0f1117;
+  --surface:  #1a1d27;
+  --border:   #2a2d3a;
+  --accent:   #4f8ef7;
+  --text:     #e8eaf0;
+  --muted:    #8b8fa8;
+  --green:    #3ecf8e;
+  --red:      #f87171;
+  --radius:   8px;
+  --font:     'Inter', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font);
+       display: flex; height: 100vh; overflow: hidden; }
+
+/* Sidebar */
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+           padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.sidebar .logo { color: var(--text); font-size: 1.1rem; font-weight: 600;
+                 padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; }
+.sidebar a { color: var(--muted); text-decoration: none; padding: 0.5rem 0.75rem;
+             border-radius: var(--radius); display: block; }
+.sidebar a:hover, .sidebar a.active { background: var(--border); color: var(--text); }
+.sidebar .spacer { flex: 1; }
+.sidebar form button { width: 100%; background: transparent; border: 1px solid var(--border);
+                       color: var(--muted); padding: 0.5rem 0.75rem; border-radius: var(--radius);
+                       cursor: pointer; text-align: left; font-size: 0.9rem; }
+.sidebar form button:hover { background: var(--border); color: var(--red); }
+
+/* Main content */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.page-content { flex: 1; overflow-y: auto; padding: 2rem; }
+
+/* Chat */
+.messages { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex;
+            flex-direction: column; gap: 1rem; }
+.msg { max-width: 75%; padding: 0.75rem 1rem; border-radius: var(--radius);
+       line-height: 1.6; white-space: pre-wrap; }
+.msg.user      { background: var(--accent); align-self: flex-end; }
+.msg.assistant { background: var(--surface); border: 1px solid var(--border);
+                 align-self: flex-start; }
+.chat-input { display: flex; gap: 0.5rem; padding: 1rem 1.5rem;
+              border-top: 1px solid var(--border); background: var(--bg); }
+.chat-input input  { flex: 1; background: var(--surface); border: 1px solid var(--border);
+                     color: var(--text); padding: 0.6rem 1rem; border-radius: var(--radius);
+                     font-size: 0.95rem; outline: none; }
+.chat-input input:focus { border-color: var(--accent); }
+.chat-input button { background: var(--accent); color: white; border: none;
+                     padding: 0.6rem 1.2rem; border-radius: var(--radius); cursor: pointer;
+                     font-size: 0.95rem; }
+.chat-input button:hover { opacity: 0.9; }
+
+/* Table */
+table  { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.gain-pos { color: var(--green); }
+.gain-neg { color: var(--red); }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+.card h3 { color: var(--muted); font-size: 0.75rem; text-transform: uppercase;
+           letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.card .value { font-size: 1.5rem; font-weight: 600; }
+
+/* Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+/* Buttons */
+.btn { background: var(--accent); color: white; border: none;
+       padding: 0.5rem 1rem; border-radius: var(--radius); cursor: pointer;
+       font-size: 0.9rem; text-decoration: none; display: inline-block; }
+.btn:hover { opacity: 0.9; }
+.btn-outline { background: transparent; border: 1px solid var(--border);
+               color: var(--text); }
+.btn-outline:hover { background: var(--border); }
+
+/* Forms */
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; color: var(--muted); font-size: 0.85rem;
+                    margin-bottom: 0.3rem; }
+.form-group input, .form-group select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 0.5rem 0.75rem; border-radius: var(--radius);
+  font-size: 0.9rem; outline: none;
+}
+.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+
+/* Page header */
+.page-header { display: flex; align-items: center; justify-content: space-between;
+               margin-bottom: 1.5rem; }
+.page-header h1 { font-size: 1.3rem; font-weight: 600; }
+
+/* Stats row */
+.stats-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { flex: 1; background: var(--surface); border: 1px solid var(--border);
+             border-radius: var(--radius); padding: 1rem; }
+.stat-card .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase;
+                    letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.stat-card .amount { font-size: 1.3rem; font-weight: 600; }
+
+/* Note box */
+.note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+        border-radius: var(--radius); padding: 0.75rem 1rem; color: var(--muted);
+        font-size: 0.85rem; line-height: 1.6; margin-top: 1rem; }
+
+/* Digest */
+.digest-content { white-space: pre-wrap; line-height: 1.8; }
+.digest-placeholder { color: var(--muted); text-align: center; padding: 3rem; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+.tab { padding: 0.5rem 1rem; cursor: pointer; color: var(--muted);
+       border-bottom: 2px solid transparent; background: none; border-top: none;
+       border-left: none; border-right: none; font-size: 0.9rem; }
+.tab.active, .tab:hover { color: var(--text); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* HTMX loading indicator */
+.htmx-indicator { display: none; color: var(--muted); font-size: 0.85rem; padding: 0.5rem; }
+.htmx-request .htmx-indicator { display: inline; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+           border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,45 @@
+{% extends "chat/base.html" %}
+{% block title %}Weekly Digest — Kyron{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="page-header">
+    <h1>Weekly Digest</h1>
+    <button class="btn"
+            hx-post="/digest/generate/"
+            hx-target="#digest-content"
+            hx-swap="innerHTML"
+            hx-indicator="#digest-loading">
+      Generate Digest
+    </button>
+  </div>
+
+  <span id="digest-loading" class="htmx-indicator">
+    <span class="spinner"></span>
+    <span style="color: var(--muted); font-size: 0.85rem; margin-left: 0.5rem;">
+      Generating your digest...
+    </span>
+  </span>
+
+  <div class="card">
+    <div id="digest-content">
+      {% if digest %}
+        <div class="digest-content">{{ digest }}</div>
+      {% else %}
+        <div class="digest-placeholder">
+          <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No digest yet</p>
+          <p style="font-size: 0.9rem;">
+            Click <strong>Generate Digest</strong> to get a plain-English summary
+            of your portfolio, tax status, and monthly plan.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="note">
+    The digest uses your live portfolio data and the strategy you approved in the Chat.
+    All content is educational — not personal investment advice.
+  </div>
+</div>
+{% endblock %}

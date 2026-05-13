@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Kyron{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+  <nav class="sidebar">
+    <div class="logo">Kyron</div>
+    <a href="/chat/"      {% if request.path == '/chat/' %}class="active"{% endif %}>💬 Chat</a>
+    <a href="/portfolio/" {% if request.path|slice:":11" == '/portfolio/' %}class="active"{% endif %}>📊 Portfolio</a>
+    <a href="/digest/"    {% if request.path == '/digest/' %}class="active"{% endif %}>📅 Digest</a>
+    <div class="spacer"></div>
+    <form method="post" action="/chat/reset/">
+      {% csrf_token %}
+      <button type="submit" title="Reset conversation (keeps portfolio data)">🔄 Reset</button>
+    </form>
+  </nav>
+
+  <div class="main">
+    {% block content %}{% endblock %}
+  </div>
+
+</body>
+</html>

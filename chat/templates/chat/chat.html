@@ -1,0 +1,36 @@
+{% extends "chat/base.html" %}
+{% block title %}Chat — Kyron{% endblock %}
+
+{% block content %}
+<div id="messages" class="messages">
+  {% for msg in messages %}
+  <div class="msg {{ msg.role }}">{{ msg.content }}</div>
+  {% endfor %}
+</div>
+
+<div id="loading-indicator" class="htmx-indicator" style="padding: 0 1.5rem 0.5rem;">
+  <span class="spinner"></span>
+  <span style="color: var(--muted); font-size: 0.85rem; margin-left: 0.5rem;">Thinking...</span>
+</div>
+
+<form class="chat-input"
+      hx-post="/chat/message/"
+      hx-target="#messages"
+      hx-swap="beforeend"
+      hx-indicator="#loading-indicator"
+      hx-on::after-request="this.reset(); window.scrollTo(0, document.getElementById('messages').scrollHeight)">
+  {% csrf_token %}
+  <input type="text"
+         name="message"
+         placeholder="Type your message..."
+         autocomplete="off"
+         autofocus>
+  <button type="submit">Send</button>
+</form>
+
+<script>
+  // Scroll to bottom on load
+  const msgs = document.getElementById('messages');
+  msgs.scrollTop = msgs.scrollHeight;
+</script>
+{% endblock %}

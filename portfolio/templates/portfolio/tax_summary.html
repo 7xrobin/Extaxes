@@ -1,0 +1,52 @@
+{% if tax_rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Ticker</th>
+      <th>Tax if Sold Now</th>
+      <th>Effective Rate</th>
+      <th>Annual Vorabpauschale</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in tax_rows %}
+    <tr>
+      <td><strong>{{ row.holding.ticker }}</strong></td>
+      <td class="{% if row.tax_if_sold > 0 %}gain-neg{% endif %}">
+        €{{ row.tax_if_sold|floatformat:0 }}
+      </td>
+      <td>{{ row.rate|floatformat:2 }}%</td>
+      <td>
+        {% if row.holding.asset_type == "etf_acc" %}
+          €{{ row.vorabpauschale|floatformat:2 }}
+        {% else %}
+          <span style="color: var(--muted)">N/A</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+  <div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 0.85rem; margin-bottom: 0.25rem;">
+    <span>Estimated annual advance tax (Vorabpauschale)</span>
+    <span>€{{ total_vp|floatformat:2 }}</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+    <span style="color: var(--muted)">Tax-free allowance remaining (Sparerpauschbetrag)</span>
+    <span class="gain-pos">€{{ allowance|floatformat:0 }}</span>
+  </div>
+</div>
+{% else %}
+<p style="color: var(--muted); padding: 1rem 0; font-size: 0.9rem;">Add holdings to see your tax summary.</p>
+{% endif %}
+
+<div class="note" style="margin-top: 1rem;">
+  Germany gives you <strong>€1,000/year</strong> tax-free on investment gains
+  (€2,000 if married) — this is called the <em>Sparerpauschbetrag</em>.
+  Accumulating ETFs also owe a small annual advance tax each January called the
+  <em>Vorabpauschale</em> — your German broker handles this automatically by
+  debiting your cash account.
+  All figures are estimates — not tax advice.
+</div>

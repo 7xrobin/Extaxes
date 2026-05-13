@@ -1,0 +1,9 @@
+django==5.0
+langgraph~=0.2
+langgraph-checkpoint-sqlite
+langchain-openai~=0.2
+openai~=1.30
+yfinance~=0.2
+pandas~=2.2
+python-dotenv~=1.0
+whitenoise~=6.7
