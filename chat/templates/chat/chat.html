@@ -8,29 +8,88 @@
   {% endfor %}
 </div>
 
-<div id="loading-indicator" class="htmx-indicator" style="padding: 0 1.5rem 0.5rem;">
-  <span class="spinner"></span>
-  <span style="color: var(--muted); font-size: 0.85rem; margin-left: 0.5rem;">Thinking...</span>
-</div>
-
-<form class="chat-input"
+<form id="chat-form"
+      class="chat-input"
       hx-post="/chat/message/"
       hx-target="#messages"
       hx-swap="beforeend"
-      hx-indicator="#loading-indicator"
-      hx-on::after-request="this.reset(); window.scrollTo(0, document.getElementById('messages').scrollHeight)">
+      hx-indicator="#loading-indicator">
   {% csrf_token %}
-  <input type="text"
-         name="message"
-         placeholder="Type your message..."
-         autocomplete="off"
-         autofocus>
+  <textarea
+    id="message-input"
+    name="message"
+    placeholder="Type your message… (Enter to send, Shift+Enter for new line)"
+    autocomplete="off"
+    autofocus
+    rows="1"></textarea>
   <button type="submit">Send</button>
 </form>
 
 <script>
-  // Scroll to bottom on load
   const msgs = document.getElementById('messages');
+  const form = document.getElementById('chat-form');
+  const input = document.getElementById('message-input');
+
   msgs.scrollTop = msgs.scrollHeight;
+
+  // Show the user's message immediately before the request goes out
+  document.body.addEventListener('htmx:beforeRequest', function(e) {
+    if (e.detail.elt !== form) return;
+
+    const text = input.value.trim();
+    if (!text) return;
+
+    const userBubble = document.createElement('div');
+    userBubble.className = 'msg user';
+    userBubble.textContent = text;
+    msgs.appendChild(userBubble);
+
+    const typingBubble = document.createElement('div');
+    typingBubble.id = 'typing-indicator';
+    typingBubble.className = 'msg assistant typing-indicator';
+    typingBubble.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(typingBubble);
+
+    msgs.scrollTop = msgs.scrollHeight;
+  });
+
+  // Remove typing indicator and scroll after assistant messages arrive
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (!e.detail.target || e.detail.target.id !== 'messages') return;
+
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) indicator.remove();
+
+    msgs.scrollTop = msgs.scrollHeight;
+  });
+
+  // Clear input after request completes
+  document.body.addEventListener('htmx:afterRequest', function(e) {
+    if (e.detail.elt !== form) return;
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Remove typing indicator on error too
+    if (!e.detail.successful) {
+      const indicator = document.getElementById('typing-indicator');
+      if (indicator) indicator.remove();
+    }
+  });
+
+  // Enter sends, Shift+Enter inserts newline
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (input.value.trim()) {
+        htmx.trigger(form, 'submit');
+      }
+    }
+  });
+
+  // Auto-resize textarea up to 120px
+  input.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
 </script>
 {% endblock %}

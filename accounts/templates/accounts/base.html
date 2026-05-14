@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Kyron{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body style="display:flex; align-items:center; justify-content:center; height:100vh;">
+  <div style="width:360px;">
+    <div style="font-size:1.4rem; font-weight:600; text-align:center; margin-bottom:2rem; color:var(--text);">Kyron</div>
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

@@ -10,7 +10,7 @@ Investment strategy assistant for expats in Germany. Tracks ETFs and stocks, exp
 <!-- TODO: Add support for bank CSV exports from other banks (N26, Scalable etc.) -->
 2. **Reads your portfolio** from a Bank CSV export or manual entry.
 3. **Calculates taxes** — Abgeltungsteuer, Teilfreistellung, Vorabpauschale, Sparerpauschbetrag — using the current German tax rules, without calling an external service.
-4. **Proposes a strategy** via GPT-4o: allocation across asset categories, monthly budget split, exit rules, and one plain-English tax insight.
+4. **Proposes a strategy** via LLM Model: allocation across asset categories, exit rules, and one plain-English tax insight.
 5. **Iterates on the plan** until you approve it.
 <!-- TODO: Use chrones recorrency to set a time to generate the digest, default to weekly but make configurable -->
 6. **Generates a weekly digest** on demand: portfolio snapshot, tax status, plan check, and one action item.
@@ -63,7 +63,8 @@ invest-tax/
 │
 ├── db.sqlite3              # Django ORM database (long-term memory)
 ├── langgraph_memory.sqlite3 # LangGraph checkpoint database (conversation state)
-└── requirements.txt
+├── pyproject.toml          # Dependencies (managed by uv)
+└── uv.lock                 # Auto-generated lock file — do not edit
 ```
 
 ---
@@ -306,17 +307,16 @@ A thin bridge between HTMX HTTP requests and the LangGraph graph. Contains no bu
 ## Running locally
 
 ```bash
-# Install dependencies
-uv venv && source .venv/bin/activate
-uv pip install -r requirements.txt
+# Install dependencies (creates .venv automatically)
+uv sync
 
 # Configure environment
 cp .env.example .env        # add OPENAI_API_KEY and DJANGO_SECRET_KEY
 
 # Set up Django
-python manage.py migrate
-python manage.py collectstatic --noinput
-python manage.py runserver
+just migrate
+just static
+just server
 ```
 
 Open `http://localhost:8000` — redirects to `/chat/` and starts the intake flow.
@@ -332,7 +332,7 @@ Open `http://localhost:8000` — redirects to `/chat/` and starts the intake flo
 ### Running tests
 
 ```bash
-python manage.py test agent portfolio chat digest --verbosity=2
+just test
 ```
 
 132 tests covering: tax engine functions, price service (mocked yfinance), node helpers, routing logic, all portfolio views, chat view double-invoke logic, and digest view HTML escaping.

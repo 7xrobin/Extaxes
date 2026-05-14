@@ -215,17 +215,25 @@ def upload_node(state: AgentState) -> AgentState:
         for h in db_holdings
     ]
 
+    if holdings:
+        upload_msg = (
+            f"I can see {len(holdings)} position(s) in your portfolio. "
+            "Let me fetch live prices and analyse your holdings..."
+        )
+    else:
+        upload_msg = (
+            "Your portfolio is empty right now. "
+            "You can add positions manually in the Portfolio tab, or upload a Trade Republic CSV. "
+            "Once you've added your holdings, come back here and I'll analyse them and build your strategy."
+        )
+
     return {
         **state,
         "holdings": holdings,
         "current_node": "analysis",
-        "messages": list(state.get("messages", [])) + [{
-            "role": "assistant",
-            "content": (
-                f"I can see {len(holdings)} position(s) in your portfolio. "
-                "Let me fetch live prices and analyse your holdings..."
-            ),
-        }],
+        "messages": list(state.get("messages", [])) + [
+            {"role": "assistant", "content": upload_msg},
+        ],
     }
 
 
@@ -322,7 +330,19 @@ IMPORTANT RULES:
 
 
 def plan_node(state: AgentState) -> AgentState:
-    """GPT-4o call — generates diversification plan with exit rules."""
+    """GPT-4o call — generates/revises diversification plan with exit rules."""
+    messages = list(state.get("messages", []))
+
+    # If the user sent an adjustment request (re-running after approval), include it
+    last_user_msg = next(
+        (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"),
+        None,
+    )
+    adjustment_section = (
+        f"\nUser's adjustment request (revise the plan to address this): {last_user_msg}\n"
+        if last_user_msg else ""
+    )
+
     context = f"""
 User profile:
 - Total savings: €{state.get('savings_total', 0):,.0f}
@@ -341,7 +361,7 @@ Unrealised gain: €{state.get('total_unrealised_gain', 0):,.0f}
 Tax status:
 - Annual tax-free allowance remaining: €{state.get('tax', {}).get('sparerpauschbetrag_remaining', 1000):,.0f}
 - Estimated annual ETF advance tax (Vorabpauschale): €{state.get('tax', {}).get('vorabpauschale_total_estimate', 0):,.2f}
-
+{adjustment_section}
 Propose:
 1. A suggested allocation across 2-4 ETF/asset categories (not specific products)
 2. How to split the €{state.get('monthly_investment_budget', 0):,.0f}/month budget across goals
@@ -378,21 +398,50 @@ Propose:
 
 # ── APPROVAL NODE ─────────────────────────────────────────────────────────────
 
+_APPROVAL_CLASSIFIER_PROMPT = """You are classifying a user message during an investment plan review.
+Reply with exactly one word:
+- approve  — user is happy and wants to save the plan
+- adjust   — user wants to change something in the plan
+- question — user is asking a general question, not directly approving or adjusting
+
+Examples:
+"Looks good" → approve
+"Yes, save it" → approve
+"Can you make it more conservative?" → adjust
+"Change the bond allocation" → adjust
+"What is a Vorabpauschale?" → question
+"Why ETFs over stocks?" → question"""
+
+_QUESTION_SYSTEM_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
+The conversation history includes an investment strategy you just proposed.
+Answer the user's question (under 150 words) by referring to the specific plan details and explaining
+the reasoning behind those recommendations.
+Use plain English; add German tax terms in brackets only when necessary.
+After your answer, ask: "Would you like to adjust anything in the plan, or does it look good to you?"
+This is educational — not personal investment advice."""
+
+
 def approval_node(state: AgentState) -> AgentState:
     """
-    Reads user's approval or adjustment request.
+    Reads user's approval, adjustment request, or general question.
     Graph interrupts BEFORE this node — user message is already in state.
     """
     messages = list(state.get("messages", []))
     last_user = next(
         (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"), ""
-    ).lower()
+    )
 
-    approved = any(w in last_user for w in [
-        "good", "looks good", "yes", "approve", "save", "confirm", "ok", "perfect", "great",
-    ])
+    intent_resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": _APPROVAL_CLASSIFIER_PROMPT},
+            {"role": "user",   "content": last_user},
+        ],
+        max_tokens=5,
+    )
+    intent = (intent_resp.choices[0].message.content or "adjust").strip().lower()
 
-    if approved:
+    if "approve" in intent:
         return {
             **state,
             "current_node": "done",
@@ -403,6 +452,33 @@ def approval_node(state: AgentState) -> AgentState:
             }],
         }
 
+    if "question" in intent:
+        # Build a context-aware conversation for the LLM answer
+        lc_messages = [{"role": "system", "content": _QUESTION_SYSTEM_PROMPT}]
+        for m in messages:
+            lc_messages.append({"role": _msg_role(m), "content": _msg_content(m)})
+
+        answer_resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=lc_messages,
+            max_tokens=300,
+        )
+        answer = answer_resp.choices[0].message.content
+
+        return {
+            **state,
+            "current_node": "re_ask",
+            "messages": messages + [
+                {"role": "assistant", "content": answer},
+                {"role": "assistant", "content":
+                    "Back to your strategy — does the plan look right to you?\n"
+                    "• **'Looks good'** — I'll save it\n"
+                    "• **'Adjust [something]'** — I'll revise it"
+                },
+            ],
+        }
+
+    # adjust
     return {
         **state,
         "current_node": "adjust",
@@ -413,7 +489,68 @@ def approval_node(state: AgentState) -> AgentState:
 
 
 def route_after_approval(state: AgentState) -> str:
-    return "done" if state.get("current_node") == "done" else "adjust"
+    node = state.get("current_node")
+    if node == "done":
+        return "done"
+    if node == "re_ask":
+        return "re_ask"
+    return "adjust"
+
+
+# ── Q&A NODE ──────────────────────────────────────────────────────────────────
+
+QA_SYSTEM_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
+The user has completed their onboarding and approved their investment strategy.
+They are now asking follow-up questions — answer them helpfully and concisely (under 200 words).
+
+Rules:
+- Refer to the user's approved strategy when relevant
+- Explain German tax terms in plain English first, then add the term in brackets
+- Never say "you should buy/sell X" — say "it might be worth reviewing" or "one option is"
+- If the user asks to revise the plan, confirm you'll update it
+- This is educational — not personal investment advice."""
+
+
+def qa_node(state: AgentState) -> AgentState:
+    """Post-approval Q&A loop. Graph interrupts BEFORE this node each turn."""
+    messages = list(state.get("messages", []))
+    strategy = state.get("approved_strategy", {}).get("plan_text", "No strategy on file.")
+    profile_ctx = (
+        f"Risk profile: {state.get('risk_profile', 'unknown')} | "
+        f"Monthly budget: €{state.get('monthly_investment_budget', 0):.0f} | "
+        f"Tax bracket: {state.get('tax_bracket', 0.42) * 100:.0f}%"
+    )
+    system_content = (
+        QA_SYSTEM_PROMPT
+        + f"\n\nApproved strategy:\n{strategy}"
+        + f"\n\nUser profile: {profile_ctx}"
+    )
+
+    conversation = [{"role": "system", "content": system_content}]
+    for m in messages:
+        role = _msg_role(m)
+        content = _msg_content(m)
+        if role in ("user", "assistant"):
+            conversation.append({"role": role, "content": content})
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=conversation,
+        max_tokens=400,
+    )
+    answer = response.choices[0].message.content
+    return {**state, "messages": messages + [{"role": "assistant", "content": answer}]}
+
+
+def route_after_qa(state: AgentState) -> str:
+    messages = list(state.get("messages", []))
+    last_user = next(
+        (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"), ""
+    ).lower()
+    revise_keywords = ["revise plan", "change plan", "new plan", "redo plan", "update strategy"]
+    if any(kw in last_user for kw in revise_keywords):
+        return "plan"
+    return "qa"
 
 
 # ── DIGEST NODE ───────────────────────────────────────────────────────────────

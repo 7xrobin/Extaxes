@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "/Users/robin/Dev/claude/invest-tax/.venv/lib/python3.12/site-packages"
+  ]
+}

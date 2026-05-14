@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 import pandas as pd
 import io
@@ -7,16 +8,15 @@ from .models import UserProfile, Holding, ExitRule
 from agent.tax_engine import tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit
 from agent.price_service import get_prices
 
-USER_ID = "demo"
 
-
-def get_or_create_profile():
-    profile, _ = UserProfile.objects.get_or_create(user_id=USER_ID)
+def _get_or_create_profile(user_id: str):
+    profile, _ = UserProfile.objects.get_or_create(user_id=user_id)
     return profile
 
 
+@login_required
 def overview(request):
-    profile = get_or_create_profile()
+    profile = _get_or_create_profile(str(request.user.id))
     holdings = list(profile.holdings.select_related("exit_rule").all())
 
     tickers = [h.ticker for h in holdings]
@@ -45,14 +45,16 @@ def overview(request):
     })
 
 
+@login_required
 def upload_page(request):
     return render(request, "portfolio/upload.html")
 
 
+@login_required
 @require_POST
 def upload_csv(request):
     """Parse Trade Republic CSV export."""
-    profile = get_or_create_profile()
+    profile = _get_or_create_profile(str(request.user.id))
     csv_file = request.FILES.get("csv_file")
     if not csv_file:
         return HttpResponse("No file uploaded", status=400)
@@ -83,10 +85,11 @@ def upload_csv(request):
     return redirect("/portfolio/")
 
 
+@login_required
 @require_POST
 def add_manual(request):
     """Add a single holding manually via form."""
-    profile = get_or_create_profile()
+    profile = _get_or_create_profile(str(request.user.id))
     h = Holding.objects.create(
         profile            = profile,
         ticker             = request.POST["ticker"].strip().upper(),
@@ -99,16 +102,18 @@ def add_manual(request):
     return redirect("/portfolio/")
 
 
+@login_required
 def holdings_partial(request):
     """HTMX partial for the holdings table."""
-    profile  = get_or_create_profile()
+    profile  = _get_or_create_profile(str(request.user.id))
     holdings = profile.holdings.select_related("exit_rule").all()
     return render(request, "portfolio/holdings.html", {"holdings": holdings})
 
 
+@login_required
 def tax_partial(request):
     """HTMX partial for the tax summary panel."""
-    profile  = get_or_create_profile()
+    profile  = _get_or_create_profile(str(request.user.id))
     holdings = profile.holdings.all()
     allowance = sparerpauschbetrag_limit(profile.is_married)
     tax_rows  = []
@@ -119,10 +124,10 @@ def tax_partial(request):
         tax = tax_on_exit(h.unrealised_gain, h.asset_type)
         total_vp += vp
         tax_rows.append({
-            "holding":       h,
+            "holding":        h,
             "vorabpauschale": vp,
-            "tax_if_sold":   tax,
-            "rate":          effective_rate(h.asset_type) * 100,
+            "tax_if_sold":    tax,
+            "rate":           effective_rate(h.asset_type) * 100,
         })
 
     return render(request, "portfolio/tax_summary.html", {

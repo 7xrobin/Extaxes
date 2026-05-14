@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
+    "accounts",
     "portfolio",
     "chat",
     "digest",
@@ -48,6 +49,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "chat.context_processors.chat_sessions",
             ],
         },
     },
@@ -91,6 +93,10 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/chat/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # LangGraph memory database — separate from Django DB
 LANGGRAPH_DB_PATH = str(BASE_DIR / "langgraph_memory.sqlite3")

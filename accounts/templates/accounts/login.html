@@ -1,0 +1,27 @@
+{% extends "accounts/base.html" %}
+{% block title %}Sign in — Kyron{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="font-size:1.1rem; font-weight:600; margin-bottom:1.5rem;">Sign in</div>
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-group">
+      <label>{{ field.label }}</label>
+      {{ field }}
+      {% if field.errors %}
+      <div style="color:var(--red); font-size:0.8rem; margin-top:0.25rem;">{{ field.errors.0 }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if form.non_field_errors %}
+    <div style="color:var(--red); font-size:0.85rem; margin-bottom:1rem;">{{ form.non_field_errors.0 }}</div>
+    {% endif %}
+    <button type="submit" class="btn" style="width:100%; margin-top:0.5rem;">Sign in</button>
+  </form>
+  <p style="color:var(--muted); font-size:0.85rem; text-align:center; margin-top:1rem;">
+    No account? <a href="/accounts/signup/" style="color:var(--accent);">Sign up</a>
+  </p>
+</div>
+{% endblock %}

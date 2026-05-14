@@ -1,0 +1,17 @@
+[project]
+name = "invest-tax"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django==5.0",
+    "langchain-openai~=0.2",
+    "langgraph~=0.2",
+    "langgraph-checkpoint-sqlite>=3.0.3",
+    "openai~=1.30",
+    "pandas~=2.2",
+    "python-dotenv~=1.0",
+    "whitenoise~=6.7",
+    "yfinance~=0.2",
+]

@@ -14,11 +14,32 @@
     <a href="/chat/"      {% if request.path == '/chat/' %}class="active"{% endif %}>💬 Chat</a>
     <a href="/portfolio/" {% if request.path|slice:":11" == '/portfolio/' %}class="active"{% endif %}>📊 Portfolio</a>
     <a href="/digest/"    {% if request.path == '/digest/' %}class="active"{% endif %}>📅 Digest</a>
+
+    {% if chat_sessions %}
+    <div class="sessions-list">
+      {% for s in chat_sessions %}
+      <a href="/chat/switch/{{ s.id }}/"
+         class="session-link {% if s.id == active_chat_session_id %}active{% endif %}">
+        {{ s.title|truncatechars:26 }}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="spacer"></div>
-    <form method="post" action="/chat/reset/">
+
+    <form method="post" action="/chat/new/">
       {% csrf_token %}
-      <button type="submit" title="Reset conversation (keeps portfolio data)">🔄 Reset</button>
+      <button type="submit" class="btn-new-chat">+ New Chat</button>
     </form>
+
+    <div class="user-bar">
+      <span class="user-label">{{ request.user.username }}</span>
+      <form method="post" action="/accounts/logout/" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn-signout">Sign out</button>
+      </form>
+    </div>
   </nav>
 
   <div class="main">
