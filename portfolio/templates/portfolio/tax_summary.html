@@ -1,52 +1,104 @@
 {% if tax_rows %}
-<table>
-  <thead>
-    <tr>
-      <th>Ticker</th>
-      <th>Tax if Sold Now</th>
-      <th>Effective Rate</th>
-      <th>Annual Vorabpauschale</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in tax_rows %}
-    <tr>
-      <td><strong>{{ row.holding.ticker }}</strong></td>
-      <td class="{% if row.tax_if_sold > 0 %}gain-neg{% endif %}">
+<div class="accordion">
+  {% for row in tax_rows %}
+  <details class="accordion-item">
+    <summary class="accordion-summary">
+      <span class="accordion-title">
+        <strong>{{ row.holding.ticker }}</strong>
+        <span class="accordion-sub">{{ row.holding.get_asset_type_display }}</span>
+      </span>
+      <span class="accordion-value {% if row.tax_if_sold > 0 %}gain-neg{% endif %}">
         €{{ row.tax_if_sold|floatformat:0 }}
-      </td>
-      <td>{{ row.rate|floatformat:2 }}%</td>
-      <td>
-        {% if row.holding.asset_type == "etf_acc" %}
-          €{{ row.vorabpauschale|floatformat:2 }}
-        {% else %}
-          <span style="color: var(--muted)">N/A</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+      </span>
+    </summary>
+    <div class="accordion-body">
+      <div class="accordion-row">
+        <span>Tax if sold now</span>
+        <span class="{% if row.tax_if_sold > 0 %}gain-neg{% endif %}">€{{ row.tax_if_sold|floatformat:2 }}</span>
+      </div>
+      <div class="accordion-row">
+        <span>Effective rate</span>
+        <span>{{ row.rate|floatformat:2 }}%</span>
+      </div>
+      <div class="accordion-row">
+        <span>Annual Vorabpauschale</span>
+        <span>
+          {% if row.holding.asset_type == "etf_acc" %}
+            €{{ row.vorabpauschale|floatformat:2 }}
+          {% else %}
+            <span style="color:var(--muted)">N/A</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </details>
+  {% endfor %}
 
-<div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
-  <div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 0.85rem; margin-bottom: 0.25rem;">
-    <span>Estimated annual advance tax (Vorabpauschale)</span>
-    <span>€{{ total_vp|floatformat:2 }}</span>
-  </div>
-  <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
-    <span style="color: var(--muted)">Tax-free allowance remaining (Sparerpauschbetrag)</span>
-    <span class="gain-pos">€{{ allowance|floatformat:0 }}</span>
-  </div>
-</div>
+  <details class="accordion-item">
+    <summary class="accordion-summary">
+      <span class="accordion-title"><strong>Estimated annual advance tax</strong>
+        <span class="accordion-sub">Vorabpauschale, all positions</span>
+      </span>
+      <span class="accordion-value">€{{ total_vp|floatformat:2 }}</span>
+    </summary>
+    <div class="accordion-body">
+      <p style="color:var(--muted);font-size:0.85rem;line-height:1.6;">
+        Sum of estimated Vorabpauschale across all accumulating ETFs. Your German broker debits
+        this from your cash account each January.
+      </p>
+    </div>
+  </details>
+
+  <details class="accordion-item">
+    <summary class="accordion-summary">
+      <span class="accordion-title"><strong>Tax-free allowance remaining</strong>
+        <span class="accordion-sub">Sparerpauschbetrag</span>
+      </span>
+      <span class="accordion-value gain-pos">€{{ allowance|floatformat:0 }}</span>
+    </summary>
+    <div class="accordion-body">
+      <p style="color:var(--muted);font-size:0.85rem;line-height:1.6;">
+        Germany gives you <strong>€1,000/year</strong> tax-free on investment gains
+        (€2,000 if married). Gains within this allowance are not taxed.
+      </p>
+    </div>
+  </details>
 {% else %}
-<p style="color: var(--muted); padding: 1rem 0; font-size: 0.9rem;">Add holdings to see your tax summary.</p>
+<div class="accordion">
+  <p style="color:var(--muted);padding:1rem 0;font-size:0.9rem;">Add holdings to see your tax summary.</p>
 {% endif %}
 
-<div class="note" style="margin-top: 1rem;">
-  Germany gives you <strong>€1,000/year</strong> tax-free on investment gains
-  (€2,000 if married) — this is called the <em>Sparerpauschbetrag</em>.
-  Accumulating ETFs also owe a small annual advance tax each January called the
-  <em>Vorabpauschale</em> — your German broker handles this automatically by
-  debiting your cash account.
-  All figures are estimates — not tax advice.
+  <details class="accordion-item">
+    <summary class="accordion-summary">
+      <span class="accordion-title"><strong>What is Sparerpauschbetrag &amp; Vorabpauschale?</strong></span>
+      <span class="accordion-value accordion-chevron-only"></span>
+    </summary>
+    <div class="accordion-body">
+      <p style="color:var(--muted);font-size:0.85rem;line-height:1.6;">
+        Germany gives you <strong>€1,000/year</strong> tax-free on investment gains
+        (€2,000 if married) — this is called the <em>Sparerpauschbetrag</em>.
+        Accumulating ETFs also owe a small annual advance tax each January called the
+        <em>Vorabpauschale</em> — your German broker handles this automatically by
+        debiting your cash account.
+        All figures are estimates — not tax advice.
+      </p>
+    </div>
+  </details>
+
+  <details class="accordion-item accordion-item-highlight">
+    <summary class="accordion-summary">
+      <span class="accordion-title"><strong>★ Why accumulating ETFs are more tax-efficient</strong></span>
+      <span class="accordion-value accordion-chevron-only"></span>
+    </summary>
+    <div class="accordion-body">
+      <p style="color:var(--muted);font-size:0.85rem;line-height:1.6;">
+        An accumulating ETF (<em>thesaurierend</em>) reinvests dividends internally — so you owe
+        no annual dividend tax. You only pay capital gains tax when you sell.
+        Additionally, all ETFs receive a <strong>30% tax exemption</strong>
+        (<em>Teilfreistellung</em>, §20 InvStG), reducing the effective rate from
+        26.375% to ~<strong>18.46%</strong>.
+        Individual stocks and savings products receive no such exemption and are taxed at the full 26.375%.
+      </p>
+    </div>
+  </details>
 </div>

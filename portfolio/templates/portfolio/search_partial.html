@@ -1,0 +1,35 @@
+{% if error %}
+<div class="note" style="border-left-color:var(--red);">{{ error }}</div>
+{% elif result %}
+<div class="suggestion-card selected" style="max-width:420px;">
+  <div class="suggestion-card-inner">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <span class="suggestion-ticker">{{ result.ticker }}</span>
+        <span class="suggestion-type">{{ result.asset_type }}</span>
+      </div>
+      <span class="suggestion-price">
+        {% if result.current_price %}{{ result.currency }} {{ result.current_price|floatformat:2 }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
+      </span>
+    </div>
+    <div class="suggestion-name">{{ result.name }}</div>
+    <div class="suggestion-meta">
+      <span class="tag">{{ result.exchange }}</span>
+      {% if result.asset_type == "etf_acc" %}
+      <span class="tag-green">★ Tax efficient¹</span>
+      {% endif %}
+    </div>
+    {% if result.asset_type == "etf_acc" %}
+    <p style="color:var(--muted);font-size:0.75rem;margin-top:0.5rem;line-height:1.5;">
+      ¹ Accumulating ETFs benefit from a 30% tax exemption (Teilfreistellung, §20 InvStG),
+      reducing the effective tax rate from 26.375% to ~18.46%.
+    </p>
+    {% endif %}
+    <div style="margin-top:0.75rem;">
+      <a href="/portfolio/upload/" class="btn btn-outline" style="font-size:0.85rem;">+ Add to Portfolio</a>
+    </div>
+  </div>
+</div>
+{% elif query %}
+<p style="color:var(--muted);font-size:0.9rem;">No result for "{{ query }}".</p>
+{% endif %}

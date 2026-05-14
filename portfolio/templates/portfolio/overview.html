@@ -8,47 +8,263 @@
     <a href="/portfolio/upload/" class="btn">+ Add Holding</a>
   </div>
 
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="label">Total Invested</div>
-      <div class="amount">€{{ total_invested|floatformat:0 }}</div>
+  <div class="card balance-card">
+    <div class="balance-hero">
+      <div class="balance-label">Current Value</div>
+      <div class="balance-amount">€{{ total_value|floatformat:0 }}</div>
     </div>
-    <div class="stat-card">
-      <div class="label">Current Value</div>
-      <div class="amount">€{{ total_value|floatformat:0 }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Unrealised Gain / Loss</div>
-      <div class="amount {% if total_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
-        {% if total_gain >= 0 %}+{% endif %}€{{ total_gain|floatformat:0 }}
+    <div class="balance-subs">
+      <div class="balance-sub">
+        <div class="balance-sub-label">Total Invested</div>
+        <div class="balance-sub-value">€{{ total_invested|floatformat:0 }}</div>
+      </div>
+      <div class="balance-sub">
+        <div class="balance-sub-label">Unrealised Gain</div>
+        <div class="balance-sub-value {% if total_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
+          {% if total_gain >= 0 %}+{% endif %}€{{ total_gain|floatformat:0 }}
+          <span class="balance-sub-pct">({% if gain_pct >= 0 %}+{% endif %}{{ gain_pct|floatformat:1 }}%)</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="grid-2">
-    <div>
-      <div class="card">
-        <h3>Holdings</h3>
+  <div class="card combined-card">
+    <div class="combined-left">
+      <div class="tabs" id="discover-tabs">
+        <button class="tab active" onclick="switchDiscoverTab(this,'suggestions')">AI Suggestions</button>
+        <button class="tab"        onclick="switchDiscoverTab(this,'search')">Search by Ticker</button>
+        <button class="tab"        onclick="switchDiscoverTab(this,'holdings')">Holdings</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-suggestions">
+        <div id="suggestions-output">
+          <p style="color:var(--muted);font-size:0.9rem;">
+            Click <strong>Generate Suggestions</strong> in the Strategy panel to get AI-powered ETF and stock ideas tailored to your profile.
+          </p>
+        </div>
+        <span id="suggestions-spinner" class="htmx-indicator">
+          <span class="spinner"></span> Asking AI…
+        </span>
+      </div>
+
+      <div class="tab-panel" id="tab-search">
+        <p class="note" style="margin-bottom:1rem;">
+          Enter an exact ticker symbol — e.g. <strong>VWCE.DE</strong>, <strong>IWDA.AS</strong>, <strong>SXR8.DE</strong>, <strong>ALV.DE</strong>. Keyword search is not supported.
+        </p>
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+          <input id="ticker-input" type="text" name="ticker" placeholder="e.g. VWCE.DE"
+                 style="flex:1;background:var(--bg);border:1px solid var(--border);
+                        color:var(--text);padding:0.5rem 0.75rem;border-radius:var(--radius);font-size:0.9rem;"
+                 hx-get="/portfolio/discover/search/"
+                 hx-trigger="keyup[key=='Enter']"
+                 hx-target="#search-output"
+                 hx-swap="innerHTML"
+                 hx-indicator="#search-spinner">
+          <button class="btn" onclick="htmx.trigger('#ticker-input','keyup',{key:'Enter'})">Look Up</button>
+          <span id="search-spinner" class="htmx-indicator"><span class="spinner"></span></span>
+        </div>
+        <div id="search-output"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-holdings">
         <div hx-get="/portfolio/holdings/"
              hx-trigger="load"
              hx-target="this"
              hx-swap="innerHTML">
-          <span class="htmx-indicator"><span class="spinner"></span> Loading...</span>
+          <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="card">
-        <h3>Tax Summary</h3>
-        <div hx-get="/portfolio/tax/"
-             hx-trigger="load"
-             hx-target="this"
-             hx-swap="innerHTML">
-          <span class="htmx-indicator"><span class="spinner"></span> Loading...</span>
+    <aside class="combined-right strategy-panel">
+      <h3>Strategy Summary</h3>
+
+      {% if profile.strategy_approved and profile.approved_strategy_text %}
+        <div class="strategy-text">{{ profile.approved_strategy_text|linebreaksbr }}</div>
+        {% if profile.strategy_approved_at %}
+          <div class="strategy-meta">Approved {{ profile.strategy_approved_at|date:"j M Y" }}</div>
+        {% endif %}
+      {% else %}
+        <p class="strategy-empty">
+          No strategy yet — <a href="/chat/">discuss one in Chat</a> to generate a personalised plan.
+        </p>
+      {% endif %}
+
+      <button class="btn"
+              style="width:100%;margin-top:0.75rem;"
+              hx-post="/portfolio/discover/suggestions/"
+              hx-target="#suggestions-output"
+              hx-swap="innerHTML"
+              hx-indicator="#suggestions-spinner"
+              onclick="switchToSuggestionsTab()">
+        Generate Suggestions
+      </button>
+
+      <div class="strategy-chart">
+        <div id="chart-placeholder" class="strategy-empty" style="display:{% if strategy_data %}none{% else %}block{% endif %};">
+          Approve a strategy or generate suggestions to see allocation.
         </div>
+        <canvas id="alloc-chart" width="240" height="240" style="display:{% if strategy_data %}block{% else %}none{% endif %};margin:0 auto;"></canvas>
+        <div id="chart-legend"></div>
       </div>
+
+      {% if coverage_pct is not None and target_amount %}
+        <div class="fill-meter">
+          <div class="fill-meter-label">
+            <span>Holdings vs Strategy</span>
+            <span class="fill-meter-pct">{{ coverage_pct|floatformat:0 }}%</span>
+          </div>
+          <div class="fill-meter-bar">
+            <div class="fill-meter-fill" style="width:{{ coverage_pct|floatformat:0 }}%;"></div>
+          </div>
+          <div class="fill-meter-sub">
+            €{{ total_value|floatformat:0 }} of €{{ target_amount|floatformat:0 }} invested
+          </div>
+        </div>
+      {% endif %}
+    </aside>
+  </div>
+
+  <div class="card">
+    <h3>Tax Summary</h3>
+    <div hx-get="/portfolio/tax/"
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML">
+      <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
     </div>
   </div>
+
+  {% if strategy_data %}
+    {{ strategy_data|json_script:"strategy-json" }}
+  {% endif %}
+
+  <script>
+  function switchDiscoverTab(btn, name) {
+    document.querySelectorAll('#discover-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('#discover-tabs ~ .tab-panel').forEach(function(p){ p.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    var panel = document.getElementById('tab-' + name);
+    if (panel) panel.classList.add('active');
+  }
+
+  function switchToSuggestionsTab() {
+    var btn = document.querySelector('#discover-tabs .tab');
+    switchDiscoverTab(btn, 'suggestions');
+  }
+
+  (function () {
+    if (window.Chart) { return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    document.head.appendChild(s);
+  })();
+
+  var CHART_COLORS = ['#4f8ef7','#3ecf8e','#f87171','#f7c948','#a78bfa','#fb923c'];
+  var allocChart = null;
+
+  function _strategyCategories() {
+    var el = document.getElementById('strategy-json');
+    if (!el) return [];
+    try {
+      var data = JSON.parse(el.textContent);
+      return (data && Array.isArray(data.categories)) ? data.categories : [];
+    } catch (e) { return []; }
+  }
+
+  function _checkedCategories() {
+    var sugEl = document.getElementById('suggestions-json');
+    if (!sugEl) return [];
+    var suggestions = [];
+    try { suggestions = JSON.parse(sugEl.textContent) || []; } catch (e) { return []; }
+    var checked = Array.from(document.querySelectorAll('.suggestion-check:checked'))
+      .map(function(cb){ return cb.value; });
+    if (checked.length === 0) return [];
+    var seen = {};
+    var out = [];
+    suggestions.forEach(function(s){
+      if (checked.indexOf(s.ticker) !== -1 && !seen[s.plan_category]) {
+        seen[s.plan_category] = true;
+        out.push({ name: s.plan_category, allocation_pct: s.allocation_pct });
+      }
+    });
+    return out;
+  }
+
+  function updateAllocChart() {
+    var cats = _checkedCategories();
+    if (cats.length === 0) cats = _strategyCategories();
+
+    var labels = cats.map(function(c){ return c.name; });
+    var data   = cats.map(function(c){ return c.allocation_pct; });
+    var colors = labels.map(function(_, i){ return CHART_COLORS[i % CHART_COLORS.length]; });
+
+    var placeholder = document.getElementById('chart-placeholder');
+    var canvas      = document.getElementById('alloc-chart');
+    var legend      = document.getElementById('chart-legend');
+
+    if (labels.length === 0) {
+      placeholder.style.display = 'block';
+      canvas.style.display      = 'none';
+      legend.innerHTML          = '';
+      return;
+    }
+
+    placeholder.style.display = 'none';
+    canvas.style.display      = 'block';
+
+    if (!window.Chart) {
+      setTimeout(updateAllocChart, 300);
+      return;
+    }
+
+    if (allocChart) {
+      allocChart.data.labels                      = labels;
+      allocChart.data.datasets[0].data            = data;
+      allocChart.data.datasets[0].backgroundColor = colors;
+      allocChart.update();
+    } else {
+      allocChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data:            data,
+            backgroundColor: colors,
+            borderWidth:     2,
+            borderColor:     '#1a1d27',
+            hoverOffset:     4
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx){ return ' ' + ctx.label + ': ' + ctx.parsed + '%'; }
+              }
+            }
+          },
+          cutout: '65%'
+        }
+      });
+    }
+
+    legend.innerHTML = labels.map(function(l, i){
+      return '<div class="legend-row">' +
+        '<span class="legend-swatch" style="background:' + colors[i] + ';"></span>' +
+        '<span class="legend-label">' + l + '</span>' +
+        '<span class="legend-pct">' + data[i] + '%</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    if (document.getElementById('strategy-json')) updateAllocChart();
+  });
+  document.body.addEventListener('htmx:afterSwap', function(){
+    updateAllocChart();
+  });
+  </script>
 </div>
 {% endblock %}

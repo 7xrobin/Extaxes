@@ -8,4 +8,6 @@ urlpatterns = [
     path("manual/",  views.add_manual,         name="portfolio-manual"),
     path("holdings/",views.holdings_partial,   name="portfolio-holdings"),
     path("tax/",     views.tax_partial,        name="portfolio-tax"),
+    path("discover/suggestions/", views.suggestions_partial, name="portfolio-suggestions"),
+    path("discover/search/",      views.search_partial,      name="portfolio-search"),
 ]

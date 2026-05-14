@@ -1,9 +1,12 @@
 """
 LangGraph node functions.
 """
+import json
 import re
 from django.conf import settings
+from django.utils import timezone
 from openai import OpenAI
+from portfolio.models import UserProfile
 from .state import AgentState, TaxState
 from .tax_engine import (
     tax_on_exit, vorabpauschale, sparerpauschbetrag_limit,
@@ -316,6 +319,27 @@ def _tax_note(asset_type: str) -> str:
 
 # ── PLAN NODE ─────────────────────────────────────────────────────────────────
 
+_JSON_BLOCK_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+def _split_plan_and_json(raw: str):
+    """Extract prose and a trailing ```json``` block. Returns (prose, data_or_None)."""
+    match = _JSON_BLOCK_RE.search(raw)
+    if not match:
+        return raw.strip(), None
+    prose = raw[:match.start()].rstrip()
+    try:
+        data = json.loads(match.group(1))
+        cats = data.get("categories")
+        if isinstance(cats, list) and all(
+            isinstance(c, dict) and "name" in c and "allocation_pct" in c for c in cats
+        ):
+            return prose, data
+    except json.JSONDecodeError:
+        pass
+    return prose, None
+
+
 PLAN_SYSTEM_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
 Your job is to help users understand their investment situation and think through a strategy.
 
@@ -367,6 +391,10 @@ Propose:
 2. How to split the €{state.get('monthly_investment_budget', 0):,.0f}/month budget across goals
 3. Simple exit rules: when it makes sense to review or take profits
 4. One plain-English tax insight relevant to their situation
+
+After the prose, append a fenced JSON block (```json ... ```) with the structured allocation in this exact shape, using the same categories you proposed:
+{{"categories": [{{"name": "Core World ETF", "allocation_pct": 60}}, ...], "total_target_amount": <number in euros>}}
+The allocation_pct values must sum to 100. The total_target_amount is the user's intended invested capital target (e.g. investable_surplus, or annual budget × years for long-horizon goals — pick a sensible number).
 """
 
     response = client.chat.completions.create(
@@ -375,14 +403,15 @@ Propose:
             {"role": "system", "content": PLAN_SYSTEM_PROMPT},
             {"role": "user",   "content": context},
         ],
-        max_tokens=600,
+        max_tokens=700,
     )
-    plan_text = response.choices[0].message.content
+    raw = response.choices[0].message.content or ""
+    plan_text, strategy_data = _split_plan_and_json(raw)
     messages = list(state.get("messages", []))
 
     return {
         **state,
-        "approved_strategy": {"plan_text": plan_text},
+        "approved_strategy": {"plan_text": plan_text, "data": strategy_data},
         "current_node": "approval",
         "messages": messages + [
             {"role": "assistant", "content": plan_text},
@@ -442,6 +471,15 @@ def approval_node(state: AgentState) -> AgentState:
     intent = (intent_resp.choices[0].message.content or "adjust").strip().lower()
 
     if "approve" in intent:
+        approved = state.get("approved_strategy") or {}
+        user_id = state.get("user_id") or "demo"
+        profile, _ = UserProfile.objects.get_or_create(user_id=user_id)
+        profile.strategy_approved = True
+        profile.approved_strategy_text = approved.get("plan_text", "") or ""
+        profile.approved_strategy_data = approved.get("data")
+        profile.strategy_approved_at = timezone.now()
+        profile.save()
+
         return {
             **state,
             "current_node": "done",

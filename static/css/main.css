@@ -162,3 +162,106 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
            border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Suggestion cards */
+.suggestion-card { display: block; cursor: pointer; border-radius: var(--radius);
+                   border: 1px solid var(--border); background: var(--bg);
+                   transition: border-color 0.15s, background 0.15s; }
+.suggestion-card:hover { border-color: var(--accent); }
+.suggestion-card:has(input:checked),
+.suggestion-card.selected { border-color: var(--accent); background: rgba(79, 142, 247, 0.07); }
+.suggestion-card-inner { padding: 0.85rem 1rem; }
+
+.suggestion-ticker { font-weight: 700; font-size: 1rem; color: var(--text); margin-right: 0.4rem; }
+.suggestion-type   { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.suggestion-price  { font-size: 0.95rem; font-weight: 600; color: var(--green); }
+.suggestion-name   { font-size: 0.85rem; color: var(--muted); margin: 0.2rem 0 0.4rem; }
+.suggestion-meta   { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.suggestion-rationale { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+.tag       { font-size: 0.72rem; background: var(--surface); border: 1px solid var(--border);
+             color: var(--accent); padding: 0.1rem 0.5rem; border-radius: 99px; }
+.tag-muted { font-size: 0.72rem; background: var(--surface); border: 1px solid var(--border);
+             color: var(--muted); padding: 0.1rem 0.5rem; border-radius: 99px; }
+.tag-green { font-size: 0.72rem; background: var(--surface); border: 1px solid var(--green);
+             color: var(--green); padding: 0.1rem 0.5rem; border-radius: 99px; }
+
+/* Consolidated balance card */
+.balance-card { padding: 1.75rem 2rem; }
+.balance-hero { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1.25rem; }
+.balance-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.balance-amount { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; }
+.balance-subs { display: flex; gap: 2.5rem; flex-wrap: wrap;
+                padding-top: 1rem; border-top: 1px solid var(--border); }
+.balance-sub-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase;
+                     letter-spacing: 0.05em; margin-bottom: 0.2rem; }
+.balance-sub-value { font-size: 1.15rem; font-weight: 600; }
+.balance-sub-pct { font-size: 0.85rem; font-weight: 500; margin-left: 0.3rem; opacity: 0.85; }
+
+/* Combined Discoverer + Strategy card */
+.combined-card { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+                 gap: 2rem; padding: 1.5rem; }
+.combined-left { min-width: 0; }
+.combined-right { min-width: 0; }
+@media (max-width: 900px) {
+  .combined-card { grid-template-columns: 1fr; }
+}
+
+/* Strategy panel */
+.strategy-panel { display: flex; flex-direction: column; gap: 0.75rem;
+                  padding-left: 1.5rem; border-left: 1px solid var(--border); }
+.strategy-panel h3 { color: var(--muted); font-size: 0.75rem; text-transform: uppercase;
+                     letter-spacing: 0.05em; }
+.strategy-text { font-size: 0.85rem; line-height: 1.6; color: var(--text);
+                 max-height: 240px; overflow-y: auto; padding-right: 0.25rem; }
+.strategy-meta { color: var(--muted); font-size: 0.72rem; }
+.strategy-empty { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.strategy-empty a { color: var(--accent); text-decoration: none; }
+.strategy-empty a:hover { text-decoration: underline; }
+.strategy-chart { margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+@media (max-width: 900px) {
+  .strategy-panel { padding-left: 0; border-left: none;
+                    padding-top: 1.5rem; border-top: 1px solid var(--border); }
+}
+
+/* Chart legend */
+.legend-row { display: flex; align-items: center; gap: 0.5rem;
+              font-size: 0.8rem; margin: 0.25rem 0; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.legend-label { flex: 1; }
+.legend-pct { color: var(--muted); }
+
+/* Fill meter (holdings vs strategy) */
+.fill-meter { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.fill-meter-label { display: flex; justify-content: space-between; align-items: baseline;
+                    font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+.fill-meter-pct { color: var(--text); font-weight: 600; font-size: 0.95rem; }
+.fill-meter-bar { width: 100%; height: 8px; background: var(--bg);
+                  border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
+.fill-meter-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green));
+                   transition: width 0.3s ease; }
+.fill-meter-sub { color: var(--muted); font-size: 0.75rem; margin-top: 0.35rem; }
+
+/* Accordion */
+.accordion { display: flex; flex-direction: column; }
+.accordion-item { border-bottom: 1px solid var(--border); }
+.accordion-item:last-child { border-bottom: none; }
+.accordion-item[open] { background: rgba(79, 142, 247, 0.03); }
+.accordion-summary { display: flex; align-items: center; justify-content: space-between;
+                     gap: 1rem; padding: 0.85rem 0.25rem; cursor: pointer; list-style: none;
+                     font-size: 0.9rem; }
+.accordion-summary::-webkit-details-marker { display: none; }
+.accordion-summary::after { content: '›'; color: var(--muted); font-size: 1.2rem;
+                            transition: transform 0.2s; margin-left: 0.5rem; }
+.accordion-item[open] > .accordion-summary::after { transform: rotate(90deg); }
+.accordion-title { display: flex; flex-direction: column; gap: 0.1rem; flex: 1;
+                   min-width: 0; }
+.accordion-sub { color: var(--muted); font-size: 0.72rem; font-weight: 400; }
+.accordion-value { font-weight: 600; font-size: 0.95rem; white-space: nowrap; }
+.accordion-chevron-only { width: 0; }
+.accordion-body { padding: 0.25rem 0.25rem 1rem; display: flex;
+                  flex-direction: column; gap: 0.4rem; }
+.accordion-row { display: flex; justify-content: space-between; font-size: 0.85rem;
+                 color: var(--muted); }
+.accordion-row span:last-child { color: var(--text); font-weight: 500; }
+.accordion-item-highlight > .accordion-summary { color: var(--green); }

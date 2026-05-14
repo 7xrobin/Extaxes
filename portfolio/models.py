@@ -11,6 +11,9 @@ class UserProfile(models.Model):
     is_married = models.BooleanField(default=False)
     intake_complete = models.BooleanField(default=False)
     strategy_approved = models.BooleanField(default=False)
+    approved_strategy_text = models.TextField(blank=True, default="")
+    approved_strategy_data = models.JSONField(null=True, blank=True)
+    strategy_approved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

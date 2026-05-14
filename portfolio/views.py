@@ -4,9 +4,12 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 import pandas as pd
 import io
+import json
+import yfinance as yf
+from openai import OpenAI
 from .models import UserProfile, Holding, ExitRule
 from agent.tax_engine import tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit
-from agent.price_service import get_prices
+from agent.price_service import get_price, get_prices
 
 
 def _get_or_create_profile(user_id: str):
@@ -35,13 +38,25 @@ def overview(request):
 
     total_invested = sum(h.units * h.avg_purchase_price for h in holdings)
     total_value    = sum(h.current_value for h in holdings)
+    total_gain     = total_value - total_invested
+    gain_pct       = (total_gain / total_invested * 100) if total_invested > 0 else 0
+
+    strategy_data = profile.approved_strategy_data or None
+    target_amount = (strategy_data or {}).get("total_target_amount") if strategy_data else None
+    coverage_pct  = None
+    if target_amount and target_amount > 0:
+        coverage_pct = min(100, total_value / target_amount * 100)
 
     return render(request, "portfolio/overview.html", {
         "profile":        profile,
         "holdings":       holdings,
         "total_invested": total_invested,
         "total_value":    total_value,
-        "total_gain":     total_value - total_invested,
+        "total_gain":     total_gain,
+        "gain_pct":       gain_pct,
+        "strategy_data":  strategy_data,
+        "target_amount":  target_amount,
+        "coverage_pct":   coverage_pct,
     })
 
 
@@ -134,4 +149,104 @@ def tax_partial(request):
         "tax_rows":  tax_rows,
         "total_vp":  total_vp,
         "allowance": allowance,
+    })
+
+
+# ── DISCOVER ──────────────────────────────────────────────────────────────────
+
+DISCOVER_SYSTEM_PROMPT = """You are Kyron, a financial assistant for expats in Germany.
+Suggest 6 specific ETFs or stocks available on European exchanges (XETRA .DE or Euronext .AS preferred).
+Include both European-domiciled ETFs AND UCITS-compliant versions of American ETFs (e.g. iShares S&P 500 UCITS SXR8.DE, Xtrackers Nasdaq 100 XNAS.DE, Amundi MSCI USA) — NOT the US-listed versions (SPY, QQQ, VTI are not valid here).
+Focus on instruments accessible via German brokers (Trade Republic, Scalable Capital, ING).
+
+For each suggestion return a JSON object with EXACTLY these fields:
+{
+  "ticker": "VWCE.DE",
+  "name": "Vanguard FTSE All-World UCITS ETF",
+  "asset_type": "etf_acc",
+  "exchange": "XETRA",
+  "plan_category": "Core World ETF",
+  "allocation_pct": 60,
+  "exit_timeframe": "Long-term 5+ years",
+  "rationale": "One sentence why this fits the user."
+}
+
+asset_type must be one of: etf_acc, etf_dist, stock
+
+Rules:
+- Prefer accumulating ETFs (etf_acc) for German tax efficiency (Teilfreistellung)
+- Include a mix: global/world ETFs, US/S&P 500 UCITS ETFs (e.g. SXR8.DE, XNAS.DE, VUSA.AS), emerging markets, bonds/stability, thematic or satellite positions, individual stocks where appropriate
+- allocation_pct values do NOT need to sum to 100 — they represent the suggested budget share for each plan category
+- Never recommend leveraged or derivative products
+- Return ONLY valid JSON: {"suggestions": [...]}
+- This is educational — not personal investment advice.
+"""
+
+
+def _generate_suggestions(profile, goals):
+    from django.conf import settings
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    goals_text = ", ".join(g.name for g in goals) if goals else "general wealth growth"
+    user_context = f"""
+User profile:
+- Risk profile: {profile.risk_profile}
+- Monthly investment budget: €{profile.monthly_investment_budget:.0f}
+- Tax bracket: {profile.tax_bracket * 100:.0f}%
+- Married (double Sparerpauschbetrag): {profile.is_married}
+- Goals: {goals_text}
+
+Return a JSON object with key "suggestions" containing an array of exactly 6 suggestion objects.
+"""
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": DISCOVER_SYSTEM_PROMPT},
+            {"role": "user",   "content": user_context},
+        ],
+        max_tokens=1200,
+    )
+    data = json.loads(response.choices[0].message.content)
+    return data.get("suggestions", [])
+
+
+@login_required
+@require_POST
+def suggestions_partial(request):
+    """HTMX partial — AI-generated ETF/stock suggestions."""
+    profile = _get_or_create_profile(str(request.user.id))
+    goals = list(profile.goals.all())
+    suggestions = _generate_suggestions(profile, goals)
+    tickers = [s["ticker"] for s in suggestions]
+    prices = get_prices(tickers)
+    for s in suggestions:
+        s["current_price"] = prices.get(s["ticker"], 0.0)
+    return render(request, "portfolio/suggestions_partial.html", {"suggestions": suggestions})
+
+
+@login_required
+def search_partial(request):
+    """HTMX partial — look up a single ticker via yfinance."""
+    ticker = request.GET.get("ticker", "").strip().upper()
+    result = error = None
+    if ticker:
+        try:
+            info = yf.Ticker(ticker).info
+            if not info.get("longName") and not info.get("shortName"):
+                error = f"No data found for '{ticker}'. Try an exact symbol like VWCE.DE or IWDA.AS."
+            else:
+                result = {
+                    "ticker":        ticker,
+                    "name":          info.get("longName") or info.get("shortName", ticker),
+                    "exchange":      info.get("exchange", ""),
+                    "currency":      info.get("currency", "EUR"),
+                    "asset_type":    "etf_acc" if info.get("quoteType", "") == "ETF" else "stock",
+                    "current_price": get_price(ticker),
+                }
+        except Exception:
+            error = f"Could not look up '{ticker}'. Check the symbol and try again."
+    return render(request, "portfolio/search_partial.html", {
+        "result": result,
+        "error":  error,
+        "query":  ticker,
     })
