@@ -82,17 +82,28 @@ def overview(request):
 
     category_coverage = _compute_category_coverage(strategy_data, holdings)
 
+    _hcd: dict[str, float] = {}
+    for h in holdings:
+        label = h.plan_category or h.get_asset_type_display()
+        _hcd[label] = _hcd.get(label, 0.0) + (h.current_value or 0.0)
+    holdings_chart_data = [
+        {"label": k, "value": round(v)}
+        for k, v in sorted(_hcd.items(), key=lambda x: -x[1])
+        if v > 0
+    ]
+
     return render(request, "portfolio/overview.html", {
-        "profile":            profile,
-        "holdings":           holdings,
-        "total_invested":     total_invested,
-        "total_value":        total_value,
-        "total_gain":         total_gain,
-        "gain_pct":           gain_pct,
-        "strategy_data":      strategy_data,
-        "target_amount":      target_amount,
-        "coverage_pct":       coverage_pct,
-        "category_coverage":  category_coverage,
+        "profile":             profile,
+        "holdings":            holdings,
+        "total_invested":      total_invested,
+        "total_value":         total_value,
+        "total_gain":          total_gain,
+        "gain_pct":            gain_pct,
+        "strategy_data":       strategy_data,
+        "target_amount":       target_amount,
+        "coverage_pct":        coverage_pct,
+        "category_coverage":   category_coverage,
+        "holdings_chart_data": holdings_chart_data,
     })
 
 
@@ -309,6 +320,53 @@ def quick_add(request):
     response = f'<div class="add-done">✓ Added {ticker} to Holdings</div>'
     oob = f'<div id="category-bars" hx-swap-oob="true">{bars_html}</div>'
     return HttpResponse(response + oob)
+
+
+_AI_REVIEW_SYSTEM = """You are Kyron, a financial assistant for expats in Germany.
+Provide a concise, educational review of the user's investment portfolio.
+Focus on: diversification, German tax efficiency (Teilfreistellung, Vorabpauschale), risk alignment, and 1-2 actionable improvements.
+Keep the total response under 200 words. Use plain text, no markdown headers. Not personal investment advice."""
+
+
+@login_required
+@require_POST
+def ai_review_partial(request):
+    """HTMX partial — AI review of the invested portfolio."""
+    from django.conf import settings
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    profile = _get_or_create_profile(str(request.user.id))
+    holdings = list(profile.holdings.all())
+
+    if not holdings:
+        return HttpResponse('<p style="color:var(--muted);font-size:0.85rem;">No holdings to review.</p>')
+
+    holdings_lines = "\n".join(
+        f"- {h.ticker} ({h.get_asset_type_display()}): {h.units} units @ €{h.avg_purchase_price:.2f} avg, "
+        f"current value €{h.current_value:.0f}, gain {h.unrealised_gain_pct:.1f}%"
+        for h in holdings
+    )
+    strategy_context = (
+        f"\n\nApproved strategy:\n{profile.approved_strategy_text}"
+        if profile.approved_strategy_text else ""
+    )
+    user_prompt = (
+        f"Risk profile: {profile.risk_profile}\n"
+        f"Monthly budget: €{profile.monthly_investment_budget:.0f}\n"
+        f"Tax bracket: {profile.tax_bracket * 100:.0f}%\n\n"
+        f"Holdings:\n{holdings_lines}"
+        f"{strategy_context}"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": _AI_REVIEW_SYSTEM},
+            {"role": "user",   "content": user_prompt},
+        ],
+        max_tokens=350,
+    )
+    review_text = response.choices[0].message.content
+    return HttpResponse(f'<div class="ai-review-text">{review_text}</div>')
 
 
 @login_required

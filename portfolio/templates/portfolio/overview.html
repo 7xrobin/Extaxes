@@ -20,102 +20,60 @@
     </div>
   </div>
 
-  <!-- ── Balance card ──────────────────────────────────────────────────── -->
-  <div class="card balance-card">
-    <div class="balance-hero">
-      <div class="balance-label">Current Value</div>
-      <div class="balance-amount">€{{ total_value|floatformat:0 }}</div>
-    </div>
-    <div class="balance-subs">
-      <div class="balance-sub">
-        <div class="balance-sub-label">Total Invested</div>
-        <div class="balance-sub-value">€{{ total_invested|floatformat:0 }}</div>
-      </div>
-      <div class="balance-sub">
-        <div class="balance-sub-label">Unrealised Gain</div>
-        <div class="balance-sub-value {% if total_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
-          {% if total_gain >= 0 %}+{% endif %}€{{ total_gain|floatformat:0 }}
-          <span class="balance-sub-pct">({% if gain_pct >= 0 %}+{% endif %}{{ gain_pct|floatformat:1 }}%)</span>
+  <!-- ── Holdings card (full width) ──────────────────────────────────────── -->
+  <div class="card">
+    <div class="holdings-top-header">
+      <h3>Holdings</h3>
+      <div class="holdings-top-stats">
+        <div class="holdings-stat">
+          <span class="holdings-stat-label">Total Value</span>
+          <span class="holdings-stat-value">€{{ total_value|floatformat:0 }}</span>
+        </div>
+        <div class="holdings-stat">
+          <span class="holdings-stat-label">Invested</span>
+          <span class="holdings-stat-value" style="color:var(--muted);">€{{ total_invested|floatformat:0 }}</span>
+        </div>
+        <div class="holdings-stat">
+          <span class="holdings-stat-label">Gain</span>
+          <span class="holdings-stat-value {% if total_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
+            {% if total_gain >= 0 %}+{% endif %}€{{ total_gain|floatformat:0 }}<span class="holdings-stat-pct">&nbsp;({% if gain_pct >= 0 %}+{% endif %}{{ gain_pct|floatformat:1 }}%)</span>
+          </span>
         </div>
       </div>
+    </div>
+    <div class="holdings-top-table"
+         hx-get="/portfolio/holdings/"
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML">
+      <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
     </div>
   </div>
 
-  <!-- ── Strategy Summary card ─────────────────────────────────────────── -->
-  <div class="card strategy-card-full">
-    <div class="strategy-full-header">
-      <h3>Strategy Summary</h3>
-      <div style="display:flex;gap:0.5rem;align-items:center;">
-        {% if profile.strategy_approved_at %}
-          <span class="strategy-meta">Approved {{ profile.strategy_approved_at|date:"j M Y" }}</span>
-        {% endif %}
-        <button class="btn btn-sm suggestions-btn"
-                hx-post="/portfolio/discover/suggestions/"
-                hx-target="#suggestions-output"
-                hx-swap="innerHTML"
-                hx-disabled-elt="this"
-                onclick="openDiscover()"
-                hx-on:htmx:before-request="this.querySelector('.btn-label').textContent='Generating…'; document.getElementById('suggestions-output').innerHTML='<div class=\'suggestions-loading\'><span class=\'spinner\'></span><span>Asking AI for personalised suggestions…</span></div>'"
-                hx-on:htmx:after-request="this.querySelector('.btn-label').textContent='Generate Suggestions'">
-          <span class="btn-label">Generate Suggestions</span>
-        </button>
-      </div>
+  <!-- ── Discover section (full width) ──────────────────────────────────── -->
+  <div class="card">
+    <div class="discover-full-header">
+      <h3>Discover</h3>
+      <button class="btn btn-sm suggestions-btn"
+              hx-post="/portfolio/discover/suggestions/"
+              hx-target="#suggestions-output"
+              hx-swap="innerHTML"
+              hx-disabled-elt="this"
+              hx-on:htmx:before-request="this.querySelector('.btn-label').textContent='Generating…'; document.getElementById('suggestions-output').innerHTML='<div class=\'suggestions-loading\'><span class=\'spinner\'></span><span>Asking AI for personalised suggestions…</span></div>'; switchDiscoverTab(document.querySelector(\'#discover-tabs .tab\'),\'suggestions\')"
+              hx-on:htmx:after-request="this.querySelector('.btn-label').textContent='Generate Suggestions'">
+        <span class="btn-label">Generate Suggestions</span>
+      </button>
     </div>
-
-    {% if category_coverage %}
-    <!-- Allocation bars -->
-    <div id="category-bars" style="margin-bottom:1.25rem;">
-      {% include "portfolio/category_bars.html" %}
-    </div>
-    {% endif %}
-
-    <div class="strategy-full-body">
-      <div class="strategy-full-text">
-        {% if profile.strategy_approved and profile.approved_strategy_text %}
-          {{ profile.approved_strategy_text|linebreaksbr }}
-        {% else %}
-          <p class="strategy-empty">
-            No strategy yet — <a href="/chat/">discuss one in Chat</a> to generate a personalised plan.
-          </p>
-        {% endif %}
-      </div>
-
-      <div class="strategy-full-chart">
-        <div id="chart-placeholder" class="strategy-empty" style="text-align:center;display:{% if strategy_data %}none{% else %}block{% endif %};">
-          Approve a strategy to see allocation.
-        </div>
-        <canvas id="alloc-chart" width="200" height="200" style="display:{% if strategy_data %}block{% else %}none{% endif %};margin:0 auto;"></canvas>
-        <div id="chart-legend" style="margin-top:0.5rem;"></div>
-        {% if coverage_pct is not None and target_amount %}
-        <div class="fill-meter" style="margin-top:1rem;">
-          <div class="fill-meter-label">
-            <span>Portfolio vs Target</span>
-            <span class="fill-meter-pct">{{ coverage_pct|floatformat:0 }}%</span>
-          </div>
-          <div class="fill-meter-bar">
-            <div class="fill-meter-fill" style="width:{{ coverage_pct|floatformat:0 }}%;"></div>
-          </div>
-          <div class="fill-meter-sub">€{{ total_value|floatformat:0 }} of €{{ target_amount|floatformat:0 }}</div>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Discover & Holdings accordion ─────────────────────────────────── -->
-  <details class="card discover-accordion" id="discover-accordion" open>
-    <summary class="discover-summary">Discover &amp; Holdings</summary>
 
     <div class="tabs" id="discover-tabs">
       <button class="tab active" onclick="switchDiscoverTab(this,'suggestions')">AI Suggestions</button>
       <button class="tab"        onclick="switchDiscoverTab(this,'search')">Search by Ticker</button>
-      <button class="tab"        onclick="switchDiscoverTab(this,'holdings')">Holdings</button>
     </div>
 
     <div class="tab-panel active" id="tab-suggestions">
       <div id="suggestions-output">
         <p style="color:var(--muted);font-size:0.9rem;">
-          Click <strong>Generate Suggestions</strong> in Strategy Summary to get AI-powered ideas tailored to your profile.
+          Click <strong>Generate Suggestions</strong> to get AI-powered ideas tailored to your profile.
         </p>
       </div>
     </div>
@@ -138,18 +96,100 @@
       </div>
       <div id="search-output"></div>
     </div>
+  </div>
 
-    <div class="tab-panel" id="tab-holdings">
-      <div hx-get="/portfolio/holdings/"
-           hx-trigger="load"
-           hx-target="this"
-           hx-swap="innerHTML">
-        <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
+  <!-- ── Bottom two-column grid ──────────────────────────────────────────── -->
+  <div class="grid-2">
+
+    <!-- Left: Strategy Summary -->
+    <div class="card">
+      <div class="strategy-bottom-header">
+        <h3>Strategy Summary</h3>
+        {% if profile.strategy_approved_at %}
+          <span class="strategy-meta">Approved {{ profile.strategy_approved_at|date:"j M Y" }}</span>
+        {% endif %}
       </div>
-    </div>
-  </details>
 
-  <!-- ── Tax Summary ───────────────────────────────────────────────────── -->
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1rem;">
+        <div id="chart-placeholder" class="strategy-empty" style="text-align:center;display:{% if strategy_data %}none{% else %}block{% endif %};">
+          Approve a strategy to see allocation.
+        </div>
+        <canvas id="alloc-chart" width="180" height="180"
+                style="display:{% if strategy_data %}block{% else %}none{% endif %};margin:0 auto;"></canvas>
+        <div id="chart-legend" style="margin-top:0.75rem;width:100%;"></div>
+      </div>
+
+      {% if profile.strategy_approved and profile.approved_strategy_text %}
+      <details class="strategy-text-toggle">
+        <summary class="strategy-text-summary">Strategy details</summary>
+        <div class="strategy-bottom-text">{{ profile.approved_strategy_text|linebreaksbr }}</div>
+      </details>
+      {% else %}
+      <p class="strategy-empty" style="margin-top:0.5rem;">
+        No strategy yet — <a href="/chat/">discuss one in Chat</a> to generate a personalised plan.
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- Right: Invested Portfolio Review -->
+    <div class="card">
+      <div class="review-card-header">
+        <h3>Invested Portfolio Review</h3>
+        <button class="btn btn-sm"
+                hx-post="/portfolio/ai-review/"
+                hx-target="#ai-review-output"
+                hx-swap="innerHTML"
+                hx-disabled-elt="this"
+                hx-on:htmx:before-request="this.textContent='Reviewing…'; document.getElementById('ai-review-output').innerHTML='<div class=\'suggestions-loading\'><span class=\'spinner\'></span><span>Analysing your portfolio…</span></div>'"
+                hx-on:htmx:after-request="this.textContent='AI Review'">
+          AI Review
+        </button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1rem;">
+        {% if holdings_chart_data %}
+        <canvas id="holdings-chart" width="180" height="180" style="margin:0 auto;"></canvas>
+        <div id="holdings-legend" style="margin-top:0.75rem;width:100%;"></div>
+        {% else %}
+        <p class="strategy-empty" style="text-align:center;padding:1rem 0;">No holdings to chart yet.</p>
+        {% endif %}
+      </div>
+
+      <div class="review-holdings-list">
+        {% if holdings %}
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Category</th>
+              <th>Value</th>
+              <th>Gain</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in holdings %}
+            <tr>
+              <td><strong>{{ h.ticker }}</strong></td>
+              <td style="color:var(--muted);">{{ h.plan_category|default:h.get_asset_type_display }}</td>
+              <td>€{{ h.current_value|floatformat:0 }}</td>
+              <td class="{% if h.unrealised_gain_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
+                {% if h.unrealised_gain_pct >= 0 %}+{% endif %}{{ h.unrealised_gain_pct|floatformat:1 }}%
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0;">No holdings yet.</p>
+        {% endif %}
+      </div>
+
+      <div id="ai-review-output" style="margin-top:0.75rem;"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Tax Summary ─────────────────────────────────────────────────────── -->
   <div class="card">
     <h3>Tax Summary</h3>
     <div hx-get="/portfolio/tax/"
@@ -163,6 +203,9 @@
   {% if strategy_data %}
     {{ strategy_data|json_script:"strategy-json" }}
   {% endif %}
+  {% if holdings_chart_data %}
+    {{ holdings_chart_data|json_script:"holdings-chart-data" }}
+  {% endif %}
 
   <script>
   function switchDiscoverTab(btn, name) {
@@ -171,13 +214,6 @@
     if (btn) btn.classList.add('active');
     var panel = document.getElementById('tab-' + name);
     if (panel) panel.classList.add('active');
-  }
-
-  function openDiscover() {
-    var acc = document.getElementById('discover-accordion');
-    if (acc) acc.open = true;
-    var btn = document.querySelector('#discover-tabs .tab');
-    switchDiscoverTab(btn, 'suggestions');
   }
 
   (function () {
@@ -255,8 +291,45 @@
     }
   }
 
+  var holdingsChart = null;
+
+  function updateHoldingsChart() {
+    var el = document.getElementById('holdings-chart-data');
+    if (!el) return;
+    var items = [];
+    try { items = JSON.parse(el.textContent) || []; } catch (e) { return; }
+    if (!items.length) return;
+    var labels = items.map(function(d){ return d.label; });
+    var data   = items.map(function(d){ return d.value; });
+    var total  = data.reduce(function(a, b){ return a + b; }, 0);
+    var colors = labels.map(function(_, i){ return CHART_COLORS[i % CHART_COLORS.length]; });
+    var canvas = document.getElementById('holdings-chart');
+    var legend = document.getElementById('holdings-legend');
+    if (!canvas) return;
+    if (!window.Chart) { setTimeout(updateHoldingsChart, 300); return; }
+    if (holdingsChart) {
+      holdingsChart.data.labels = labels;
+      holdingsChart.data.datasets[0].data = data;
+      holdingsChart.data.datasets[0].backgroundColor = colors;
+      holdingsChart.update();
+    } else {
+      holdingsChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#1a1d27', hoverOffset: 4 }] },
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.label + ': €' + ctx.parsed.toLocaleString(); } } } }, cutout: '65%' }
+      });
+    }
+    if (legend) {
+      legend.innerHTML = labels.map(function(l, i){
+        var pct = total > 0 ? Math.round(data[i] / total * 100) : 0;
+        return '<div class="legend-row"><span class="legend-swatch" style="background:' + colors[i] + ';"></span><span class="legend-label">' + l + '</span><span class="legend-pct">' + pct + '%</span></div>';
+      }).join('');
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     if (document.getElementById('strategy-json')) updateAllocChart();
+    updateHoldingsChart();
   });
   document.body.addEventListener('htmx:afterSwap', function(){
     updateAllocChart();

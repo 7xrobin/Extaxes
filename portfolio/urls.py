@@ -13,4 +13,5 @@ urlpatterns = [
     path("quick-add/",            views.quick_add,           name="portfolio-quick-add"),
     path("clear/portfolio/",      views.clear_portfolio,     name="portfolio-clear-portfolio"),
     path("clear/strategy/",       views.clear_strategy,      name="portfolio-clear-strategy"),
+    path("ai-review/",            views.ai_review_partial,   name="portfolio-ai-review"),
 ]

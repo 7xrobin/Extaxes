@@ -328,3 +328,44 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
                  color: var(--muted); }
 .accordion-row span:last-child { color: var(--text); font-weight: 500; }
 .accordion-item-highlight > .accordion-summary { color: var(--green); }
+
+/* Holdings top card */
+.holdings-top-header { display: flex; justify-content: space-between; align-items: flex-start;
+                       margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem; }
+.holdings-top-stats  { display: flex; gap: 2rem; flex-wrap: wrap; }
+.holdings-stat       { display: flex; flex-direction: column; gap: 0.15rem; }
+.holdings-stat-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+                       letter-spacing: 0.05em; }
+.holdings-stat-value { font-size: 1.05rem; font-weight: 600; }
+.holdings-stat-pct   { font-size: 0.8rem; font-weight: 500; opacity: 0.85; }
+.holdings-top-table td, .holdings-top-table th { font-size: 0.82rem; padding: 0.4rem 0.6rem; }
+
+/* Discover full card */
+.discover-full-header { display: flex; justify-content: space-between; align-items: center;
+                        margin-bottom: 1rem; }
+
+/* Strategy bottom card */
+.strategy-bottom-header { display: flex; justify-content: space-between; align-items: center;
+                           margin-bottom: 1rem; }
+.strategy-bottom-text   { font-size: 0.85rem; line-height: 1.6; color: var(--text);
+                           padding-top: 0.75rem; }
+
+/* Collapsible strategy text */
+.strategy-text-toggle   { border-top: 1px solid var(--border); margin-top: 0.25rem; }
+.strategy-text-summary  { display: flex; align-items: center; justify-content: space-between;
+                           padding: 0.6rem 0; cursor: pointer; list-style: none;
+                           color: var(--muted); font-size: 0.75rem; text-transform: uppercase;
+                           letter-spacing: 0.05em; user-select: none; }
+.strategy-text-summary::-webkit-details-marker { display: none; }
+.strategy-text-summary::after { content: '›'; font-size: 1.1rem; color: var(--muted);
+                                 transition: transform 0.2s; display: inline-block; }
+.strategy-text-toggle[open] > .strategy-text-summary::after { transform: rotate(90deg); }
+
+/* Invested Portfolio Review card */
+.review-card-header   { display: flex; justify-content: space-between; align-items: center;
+                        margin-bottom: 0.75rem; }
+.review-holdings-list { max-height: 260px; overflow-y: auto; }
+.compact-table td, .compact-table th { font-size: 0.82rem; padding: 0.4rem 0.5rem; }
+.ai-review-text { font-size: 0.85rem; line-height: 1.7; color: var(--text);
+                  border-top: 1px solid var(--border); padding-top: 0.75rem;
+                  white-space: pre-wrap; }
