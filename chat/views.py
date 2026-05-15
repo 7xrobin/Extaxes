@@ -92,12 +92,15 @@ def send_message(request):
     except Exception:
         count_before = 0
 
-    graph.invoke(
-        {"messages": [{"role": "user", "content": user_text}]},
+    # Add the user message to the existing graph state without restarting from
+    # the entry point. Calling graph.invoke(input, ...) on an interrupted graph
+    # is treated as a NEW run (resets next to entry point), which restarts intake.
+    # update_state appends to state in place; invoke(None) then resumes from the
+    # current interrupt and runs the next node (e.g. qa).
+    graph.update_state(
         thread_config,
+        {"messages": [{"role": "user", "content": user_text}]},
     )
-    # With interrupt_before, the first invoke enqueues the user message and stops
-    # before the next node. The second invoke(None) resumes and actually runs it.
     graph.invoke(None, thread_config)
 
     state_after = graph.get_state(thread_config)

@@ -1,19 +1,16 @@
 # Kyron
 
-Investment strategy assistant for expats in Germany. Tracks ETFs and stocks, explains German tax rules in plain English, and generates a weekly digest — powered by a LangGraph agent with human-in-the-loop conversation.
+Investment strategy assistant for expats in Germany. Tracks ETFs  explains German tax rules in plain English, and generates a weekly digest — powered by a LangGraph agent with human-in-the-loop conversation.
 
 ---
 
 ## What it does
 
 1. **Onboards** you through six questions (savings, emergency fund, monthly budget, goals, risk tolerance, salary) in a conversational chat interface.
-<!-- TODO: Add support for bank CSV exports from other banks (N26, Scalable etc.) -->
-2. **Reads your portfolio** from a Bank CSV export or manual entry.
-3. **Calculates taxes** — Abgeltungsteuer, Teilfreistellung, Vorabpauschale, Sparerpauschbetrag — using the current German tax rules, without calling an external service.
-4. **Proposes a strategy** via LLM Model: allocation across asset categories, exit rules, and one plain-English tax insight.
-5. **Iterates on the plan** until you approve it.
-<!-- TODO: Use chrones recorrency to set a time to generate the digest, default to weekly but make configurable -->
-6. **Generates a weekly digest** on demand: portfolio snapshot, tax status, plan check, and one action item.
+2. **Proposes a strategy** via LLM Model: allocation across asset categories, exit rules, and one plain-English tax insight.
+3. **Generate investment suggestions** Based on your strategy and tax advantages in Germany.
+4. **Calculates taxes** — Abgeltungsteuer, Teilfreistellung, Vorabpauschale, Sparerpauschbetrag — using the current German tax rules, without calling an external service.
+5. **Generates a weekly digest** on demand: portfolio snapshot, tax status, plan check, and one action item.
 
 ---
 
@@ -283,7 +280,7 @@ Owns the four Django models. Data here persists independently of the agent conve
 **Views:**
 - `GET /portfolio/` — fetches live prices via yfinance, updates holding values, renders the overview
 - `POST /portfolio/manual/` — adds a single holding by form
-- `POST /portfolio/upload/csv/` — parses a Trade Republic CSV, upserts holdings via `update_or_create`
+- `POST /portfolio/upload/csv/` — parses a CSV, upserts holdings via `update_or_create`
 - `GET /portfolio/holdings/` — HTMX partial: holdings table
 - `GET /portfolio/tax/` — HTMX partial: tax summary panel
 

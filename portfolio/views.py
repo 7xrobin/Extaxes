@@ -104,7 +104,7 @@ def upload_page(request):
 @login_required
 @require_POST
 def upload_csv(request):
-    """Parse Trade Republic CSV export."""
+    """Parse CSV export."""
     profile = _get_or_create_profile(str(request.user.id))
     csv_file = request.FILES.get("csv_file")
     if not csv_file:

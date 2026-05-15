@@ -70,3 +70,4 @@ class AgentState(MessagesState):
     # Strategy
     approved_strategy: dict
     monthly_split: dict
+    strategy_saved: bool

@@ -28,15 +28,12 @@ def build_graph():
     })
     builder.add_edge("upload",   "analysis")
     builder.add_edge("analysis", "plan")
-    builder.add_edge("plan",     "approval")
-    builder.add_conditional_edges("approval", nodes.route_after_approval, {
-        "adjust": "plan",
-        "done":   "qa",   # after approval, enter the Q&A loop
-        "re_ask": "approval",
-    })
+    builder.add_edge("plan",     "qa")      # plan goes directly to qa
+    builder.add_edge("approval", "qa")      # after save, return to qa loop
     builder.add_conditional_edges("qa", nodes.route_after_qa, {
-        "qa":   "qa",     # default: loop back (interrupt fires before each turn)
-        "plan": "plan",   # user explicitly asked to revise strategy
+        "qa":       "qa",        # default: loop back
+        "plan":     "plan",      # user wants to revise strategy
+        "approval": "approval",  # user approved — save to DB (no interrupt)
     })
     builder.add_edge("digest", END)
 
@@ -45,7 +42,7 @@ def build_graph():
     memory = SqliteSaver(conn)
     return builder.compile(
         checkpointer=memory,
-        interrupt_before=["intake", "approval", "qa"],
+        interrupt_before=["intake", "qa"],
     )
 
 

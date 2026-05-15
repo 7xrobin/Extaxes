@@ -39,6 +39,9 @@
     const text = input.value.trim();
     if (!text) return;
 
+    input.value = '';
+    input.style.height = 'auto';
+
     const userBubble = document.createElement('div');
     userBubble.className = 'msg user';
     userBubble.textContent = text;
@@ -63,13 +66,9 @@
     msgs.scrollTop = msgs.scrollHeight;
   });
 
-  // Clear input after request completes
+  // Remove typing indicator on error
   document.body.addEventListener('htmx:afterRequest', function(e) {
     if (e.detail.elt !== form) return;
-    input.value = '';
-    input.style.height = 'auto';
-
-    // Remove typing indicator on error too
     if (!e.detail.successful) {
       const indicator = document.getElementById('typing-indicator');
       if (indicator) indicator.remove();
