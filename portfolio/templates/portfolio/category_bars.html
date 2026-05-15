@@ -1,0 +1,21 @@
+{% for cat in category_coverage %}
+<div class="alloc-bar-row">
+  <div class="alloc-bar-meta">
+    <span class="alloc-bar-name">{{ cat.name }}</span>
+    <span class="alloc-bar-target">{{ cat.allocation_pct }}% target</span>
+  </div>
+  <div class="alloc-bar-track">
+    <div class="alloc-bar-fill" style="width:{{ cat.fill_pct }}%;background:{{ cat.color }};"></div>
+  </div>
+  <div class="alloc-bar-info">
+    <span class="alloc-bar-pct" style="color:{{ cat.color }};">{{ cat.fill_pct|floatformat:0 }}%</span>
+    {% if cat.holdings_count %}
+      <span class="alloc-bar-count">{{ cat.holdings_count }} holding{{ cat.holdings_count|pluralize }}</span>
+    {% else %}
+      <span class="alloc-bar-count" style="color:var(--muted);">none yet</span>
+    {% endif %}
+  </div>
+</div>
+{% empty %}
+<p class="strategy-empty">No allocation categories defined.</p>
+{% endfor %}

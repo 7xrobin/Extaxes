@@ -96,9 +96,9 @@ def send_message(request):
         {"messages": [{"role": "user", "content": user_text}]},
         thread_config,
     )
-    # Single invoke is enough: it runs all nodes until the next interrupt_before point.
-    # A second invoke(None) would resume from that interrupt and re-run the same node
-    # with the same user message, causing loops (e.g. approval regenerating the plan).
+    # With interrupt_before, the first invoke enqueues the user message and stops
+    # before the next node. The second invoke(None) resumes and actually runs it.
+    graph.invoke(None, thread_config)
 
     state_after = graph.get_state(thread_config)
     all_messages = _get_messages(state_after)

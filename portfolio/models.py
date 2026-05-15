@@ -51,6 +51,7 @@ class Holding(models.Model):
     ticker = models.CharField(max_length=20)
     isin = models.CharField(max_length=12, blank=True)
     asset_type = models.CharField(max_length=10, choices=ASSET_TYPES)
+    plan_category = models.CharField(max_length=100, blank=True, default="")
     units = models.FloatField()
     avg_purchase_price = models.FloatField()
     purchase_date = models.DateField(null=True, blank=True)

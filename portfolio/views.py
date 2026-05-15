@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
+from django.template.loader import render_to_string
 import pandas as pd
 import io
 import json
@@ -10,6 +11,38 @@ from openai import OpenAI
 from .models import UserProfile, Holding, ExitRule
 from agent.tax_engine import tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit
 from agent.price_service import get_price, get_prices
+
+
+_CATEGORY_COLORS = ['#4f8ef7', '#3ecf8e', '#f87171', '#f7c948', '#a78bfa', '#fb923c']
+
+
+def _compute_category_coverage(strategy_data, holdings):
+    if not strategy_data:
+        return []
+    cats = strategy_data.get('categories') or []
+    target_total = strategy_data.get('total_target_amount') or 0
+
+    holdings_by_cat = {}
+    for h in holdings:
+        if h.plan_category:
+            holdings_by_cat.setdefault(h.plan_category, []).append(h)
+
+    result = []
+    for i, cat in enumerate(cats):
+        cat_holdings = holdings_by_cat.get(cat['name'], [])
+        cat_value = sum(h.current_value for h in cat_holdings)
+        cat_target = cat['allocation_pct'] / 100 * target_total if target_total else 0
+        fill_pct = min(100, cat_value / cat_target * 100) if cat_target > 0 else 0
+        result.append({
+            'name': cat['name'],
+            'allocation_pct': cat['allocation_pct'],
+            'fill_pct': round(fill_pct, 1),
+            'cat_value': cat_value,
+            'cat_target': cat_target,
+            'holdings_count': len(cat_holdings),
+            'color': _CATEGORY_COLORS[i % len(_CATEGORY_COLORS)],
+        })
+    return result
 
 
 def _get_or_create_profile(user_id: str):
@@ -47,16 +80,19 @@ def overview(request):
     if target_amount and target_amount > 0:
         coverage_pct = min(100, total_value / target_amount * 100)
 
+    category_coverage = _compute_category_coverage(strategy_data, holdings)
+
     return render(request, "portfolio/overview.html", {
-        "profile":        profile,
-        "holdings":       holdings,
-        "total_invested": total_invested,
-        "total_value":    total_value,
-        "total_gain":     total_gain,
-        "gain_pct":       gain_pct,
-        "strategy_data":  strategy_data,
-        "target_amount":  target_amount,
-        "coverage_pct":   coverage_pct,
+        "profile":            profile,
+        "holdings":           holdings,
+        "total_invested":     total_invested,
+        "total_value":        total_value,
+        "total_gain":         total_gain,
+        "gain_pct":           gain_pct,
+        "strategy_data":      strategy_data,
+        "target_amount":      target_amount,
+        "coverage_pct":       coverage_pct,
+        "category_coverage":  category_coverage,
     })
 
 
@@ -222,6 +258,80 @@ def suggestions_partial(request):
     for s in suggestions:
         s["current_price"] = prices.get(s["ticker"], 0.0)
     return render(request, "portfolio/suggestions_partial.html", {"suggestions": suggestions})
+
+
+@login_required
+@require_POST
+def quick_add(request):
+    """HTMX — add a suggestion directly as a holding from the suggestions panel."""
+    profile = _get_or_create_profile(str(request.user.id))
+    ticker = request.POST.get('ticker', '').strip().upper()
+    asset_type = request.POST.get('asset_type', 'etf_acc')
+    plan_category = request.POST.get('plan_category', '')
+    current_price_str = request.POST.get('current_price', '0') or '0'
+    try:
+        units = float(request.POST.get('units', 0) or 0)
+        avg_price = float(request.POST.get('avg_purchase_price', 0) or 0)
+        current_price = float(current_price_str)
+    except ValueError:
+        return HttpResponse('<p class="add-error">Invalid units or price.</p>', status=400)
+
+    if not ticker or units <= 0 or avg_price <= 0:
+        return HttpResponse('<p class="add-error">Enter valid units and average price.</p>', status=400)
+
+    h, created = Holding.objects.get_or_create(
+        profile=profile,
+        ticker=ticker,
+        defaults={
+            'asset_type':         asset_type,
+            'units':              units,
+            'avg_purchase_price': avg_price,
+            'current_price':      current_price,
+            'current_value':      units * current_price,
+            'plan_category':      plan_category,
+        },
+    )
+    if not created:
+        h.units += units
+        h.plan_category = plan_category or h.plan_category
+        h.save(update_fields=['units', 'plan_category'])
+    ExitRule.objects.get_or_create(holding=h)
+
+    # Recompute category bars for OOB swap
+    holdings = list(profile.holdings.all())
+    strategy_data = profile.approved_strategy_data
+    category_coverage = _compute_category_coverage(strategy_data, holdings)
+    bars_html = render_to_string(
+        'portfolio/category_bars.html',
+        {'category_coverage': category_coverage},
+    )
+
+    response = f'<div class="add-done">✓ Added {ticker} to Holdings</div>'
+    oob = f'<div id="category-bars" hx-swap-oob="true">{bars_html}</div>'
+    return HttpResponse(response + oob)
+
+
+@login_required
+@require_POST
+def clear_portfolio(request):
+    profile = _get_or_create_profile(str(request.user.id))
+    profile.holdings.all().delete()
+    return redirect("/portfolio/")
+
+
+@login_required
+@require_POST
+def clear_strategy(request):
+    profile = _get_or_create_profile(str(request.user.id))
+    profile.strategy_approved = False
+    profile.approved_strategy_text = ""
+    profile.approved_strategy_data = None
+    profile.strategy_approved_at = None
+    profile.save(update_fields=[
+        "strategy_approved", "approved_strategy_text",
+        "approved_strategy_data", "strategy_approved_at",
+    ])
+    return redirect("/portfolio/")
 
 
 @login_required

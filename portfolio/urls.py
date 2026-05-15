@@ -10,4 +10,7 @@ urlpatterns = [
     path("tax/",     views.tax_partial,        name="portfolio-tax"),
     path("discover/suggestions/", views.suggestions_partial, name="portfolio-suggestions"),
     path("discover/search/",      views.search_partial,      name="portfolio-search"),
+    path("quick-add/",            views.quick_add,           name="portfolio-quick-add"),
+    path("clear/portfolio/",      views.clear_portfolio,     name="portfolio-clear-portfolio"),
+    path("clear/strategy/",       views.clear_strategy,      name="portfolio-clear-strategy"),
 ]
