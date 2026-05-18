@@ -29,6 +29,20 @@ body { background: var(--bg); color: var(--text); font-family: var(--font);
                        cursor: pointer; text-align: left; font-size: 0.9rem; }
 .sidebar form button:hover { background: var(--border); color: var(--red); }
 
+/* Session rows with delete */
+.session-row { display: flex; align-items: center; border-radius: var(--radius); }
+.session-row:hover, .session-row.active { background: var(--border); }
+.session-row .session-link { flex: 1; color: var(--muted); text-decoration: none;
+                              padding: 0.5rem 0.75rem; font-size: 0.85rem;
+                              overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.session-row:hover .session-link, .session-row.active .session-link { color: var(--text); }
+.session-delete-form { display: flex; margin: 0; }
+.btn-delete-session { background: transparent; border: none; color: transparent;
+                      padding: 0.5rem 0.5rem; cursor: pointer; font-size: 1rem;
+                      line-height: 1; border-radius: var(--radius); }
+.session-row:hover .btn-delete-session { color: var(--muted); }
+.btn-delete-session:hover { color: var(--red) !important; background: transparent; }
+
 /* Main content */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .page-content { flex: 1; overflow-y: auto; padding: 2rem; }
@@ -61,6 +75,12 @@ th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var
 th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .gain-pos { color: var(--green); }
 .gain-neg { color: var(--red); }
+.type-badge { color: var(--muted); font-size: 0.7em; font-weight: 500; vertical-align: super; }
+
+/* ETF type hints in upload form */
+.asset-type-hints { margin-top: 0.6rem; font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+.asset-type-hints p { margin-bottom: 0.3rem; }
+.asset-type-hints strong { color: var(--text); }
 
 /* Cards */
 .card { background: var(--surface); border: 1px solid var(--border);

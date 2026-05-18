@@ -133,3 +133,14 @@ def switch_session(request, session_id):
     session = get_object_or_404(ChatSession, id=session_id, user=request.user)
     request.session['active_chat_session_id'] = session.id
     return redirect('/chat/')
+
+
+@login_required
+@require_POST
+def delete_session(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    was_active = request.session.get('active_chat_session_id') == session.id
+    session.delete()
+    if was_active:
+        request.session.pop('active_chat_session_id', None)
+    return redirect('/chat/')

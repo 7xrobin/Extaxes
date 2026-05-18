@@ -83,10 +83,20 @@ def intake_node(state: AgentState) -> AgentState:
     # Ask next question
     if step < len(INTAKE_QUESTIONS):
         _, question = INTAKE_QUESTIONS[step]
+        if step == 0:
+            content = (
+                "Hi! I'm Kyron, your financial clarity assistant for expats in Germany. "
+                "I'll help you understand your investments, estimate your tax exposure, "
+                "and build a plain-English strategy — no jargon, no product pitches.\n\n"
+                "Let's start with a few quick questions.\n\n"
+                + question
+            )
+        else:
+            content = question
         return {
             **state,
             "intake_step": step + 1,
-            "messages": messages + [{"role": "assistant", "content": question}],
+            "messages": messages + [{"role": "assistant", "content": content}],
             "current_node": "intake",
         }
 
@@ -312,7 +322,7 @@ def _tax_note(asset_type: str) -> str:
         "etf_acc":  "Accumulating ETF — 30% tax exemption applies (Teilfreistellung §20 InvStG). Annual Vorabpauschale deducted in January.",
         "etf_dist": "Distributing ETF — 30% tax exemption applies. Dividends taxed when received.",
         "stock":    "Individual stock — no tax exemption. Full 26.375% on gains.",
-        "savings":  "Savings product — interest taxed at 26.375% when credited.",
+        "savings":  "Savings / Cash — interest taxed at 26.375% when credited.",
     }
     return notes.get(asset_type, "")
 

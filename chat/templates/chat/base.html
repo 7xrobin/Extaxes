@@ -18,10 +18,13 @@
     {% if chat_sessions %}
     <div class="sessions-list">
       {% for s in chat_sessions %}
-      <a href="/chat/switch/{{ s.id }}/"
-         class="session-link {% if s.id == active_chat_session_id %}active{% endif %}">
-        {{ s.title|truncatechars:26 }}
-      </a>
+      <div class="session-row {% if s.id == active_chat_session_id %}active{% endif %}">
+        <a href="/chat/switch/{{ s.id }}/" class="session-link">{{ s.title|truncatechars:22 }}</a>
+        <form method="post" action="/chat/delete/{{ s.id }}/" class="session-delete-form">
+          {% csrf_token %}
+          <button type="submit" class="btn-delete-session" title="Delete chat">×</button>
+        </form>
+      </div>
       {% endfor %}
     </div>
     {% endif %}

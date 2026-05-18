@@ -170,7 +170,7 @@
             {% for h in holdings %}
             <tr>
               <td><strong>{{ h.ticker }}</strong></td>
-              <td style="color:var(--muted);">{{ h.plan_category|default:h.get_asset_type_display }}</td>
+              <td style="color:var(--muted);">{{ h.plan_category|default:h.get_asset_type_display }}{% if h.asset_type == "etf_acc" %} <sup class="type-badge" title="Accumulating ETF">*Acc</sup>{% elif h.asset_type == "etf_dist" %} <sup class="type-badge" title="Distributing ETF">*Dist</sup>{% endif %}</td>
               <td>€{{ h.current_value|floatformat:0 }}</td>
               <td class="{% if h.unrealised_gain_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
                 {% if h.unrealised_gain_pct >= 0 %}+{% endif %}{{ h.unrealised_gain_pct|floatformat:1 }}%

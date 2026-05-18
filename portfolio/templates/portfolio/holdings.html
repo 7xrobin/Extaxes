@@ -16,7 +16,9 @@
     {% for h in holdings %}
     <tr>
       <td><strong>{{ h.ticker }}</strong></td>
-      <td>{{ h.get_asset_type_display }}</td>
+      <td>
+        {{ h.plan_category|default:h.get_asset_type_display }}{% if h.asset_type == "etf_acc" %} <sup class="type-badge" title="Accumulating ETF">*Acc</sup>{% elif h.asset_type == "etf_dist" %} <sup class="type-badge" title="Distributing ETF">*Dist</sup>{% endif %}
+      </td>
       <td>{{ h.units }}</td>
       <td>€{{ h.avg_purchase_price|floatformat:2 }}</td>
       <td>€{{ h.current_price|floatformat:2 }}</td>
