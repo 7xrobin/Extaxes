@@ -13,8 +13,99 @@ from .tax_engine import (
     exit_tax_applies, effective_rate,
 )
 from .price_service import get_prices
+from .simulation import (
+    DEFAULT_ANNUAL_RETURN_PCT, project_growth,
+    recommend_investment, required_monthly_for_target,
+)
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+
+# ── RAG + DETERMINISTIC TOOLS ──────────────────────────────────────────────────
+
+def _tax_rag_context(query: str) -> str:
+    """
+    Retrieve trusted tax-source passages for `query`. Import is guarded so the
+    graph keeps working when the rag app has no indexed sources (or none match).
+    Returns a prompt-ready, source-cited block, or "" when nothing relevant.
+    """
+    try:
+        from rag.retriever import build_context
+        ctx = build_context(query)
+    except Exception:
+        return ""
+    if not ctx:
+        return ""
+    return (
+        "\n\nTRUSTED TAX SOURCES — treat these as the PRIMARY source of truth for any "
+        "tax question. Prefer them over your own assumptions, and cite the source URL "
+        "in your answer when you use them:\n" + ctx
+    )
+
+
+_PROJECTION_KEYWORDS = (
+    "how much", "simulate", "simulation", "project", "projection", "grow to",
+    "worth in", "in 10 years", "in 5 years", "in 20 years", "future value",
+    "compound", "to reach", "to hit", "per month to", "each month to",
+)
+
+
+def _projection_context(query: str, state: dict) -> str:
+    """
+    If the user is asking a how-much / projection question, compute the figures
+    deterministically (the LLM must not do the math) and return a prompt block
+    with exact numbers. Returns "" when the question isn't projection-related.
+    """
+    q = (query or "").lower()
+    if not any(kw in q for kw in _PROJECTION_KEYWORDS):
+        return ""
+
+    start_amount = float(state.get("total_current_value", 0) or 0)
+    monthly = float(state.get("monthly_investment_budget", 0) or 0)
+
+    years_match = re.search(r"(\d{1,2})\s*(?:year|yr)", q)
+    years = int(years_match.group(1)) if years_match else 10
+
+    proj = project_growth(
+        start_amount=start_amount,
+        monthly_contribution=monthly,
+        annual_return_pct=DEFAULT_ANNUAL_RETURN_PCT,
+        years=years,
+    )
+    rec = recommend_investment(
+        state.get("investable_surplus", 0), monthly
+    )
+
+    lines = [
+        "\n\nCOMPUTED PROJECTION (use these EXACT figures — do not recalculate):",
+        f"- Assumptions: start €{proj['inputs']['start_amount']:,.0f}, "
+        f"€{proj['inputs']['monthly_contribution']:,.0f}/month, "
+        f"{proj['inputs']['annual_return_pct']:.0f}%/yr avg return, "
+        f"{years} years, accumulating world ETF.",
+        f"- Total contributed over the period: €{proj['total_contributed']:,.0f}",
+        f"- Projected value (gross): €{proj['final_gross']:,.0f}",
+        f"- Projected gain: €{proj['total_gain']:,.0f}",
+        f"- Estimated German tax if fully sold at the end "
+        f"(~{proj['effective_rate_pct']:.1f}% effective): €{proj['tax_on_gain']:,.0f}",
+        f"- Projected value after tax (net): €{proj['final_net']:,.0f}",
+        f"- 'How much to invest' from their own numbers: lump sum available "
+        f"€{rec['lump_sum_available']:,.0f}, plus €{rec['monthly_contribution']:,.0f}/month.",
+    ]
+
+    # If they named a target amount, also solve for the required monthly contribution.
+    target_match = re.search(r"(?:reach|hit|get to|target of)\s*€?\s*([\d.,]+)\s*(k|m)?", q)
+    if target_match:
+        target = _extract_number(target_match.group(0))
+        if target > 0:
+            need = required_monthly_for_target(
+                target, years, DEFAULT_ANNUAL_RETURN_PCT, start_amount
+            )
+            lines.append(
+                f"- To reach €{target:,.0f} in {years} years from €{start_amount:,.0f}, "
+                f"they'd need about €{need:,.0f}/month."
+            )
+
+    return "\n".join(lines)
 
 
 def _msg_role(m) -> str:
@@ -581,17 +672,24 @@ def qa_node(state: AgentState) -> AgentState:
                 }],
             }
 
-        # Anything else (question, empty, hallucinated text) → safe Q&A path
+    # Trusted tax sources + any deterministic projection — injected into either branch
+    # so numbers stay accurate and tax answers are grounded in the curated sources.
+    extra_context = _tax_rag_context(last_user) + _projection_context(last_user, dict(state))
+
+    if not strategy_saved:
+        # Anything other than approve/adjust (question, empty, hallucinated) → safe Q&A path
         system_content = (
             _QA_PENDING_PROMPT
             + f"\n\nProposed strategy:\n{strategy}"
             + f"\n\nUser profile: {profile_ctx}"
+            + extra_context
         )
     else:
         system_content = (
             _QA_APPROVED_PROMPT
             + f"\n\nApproved strategy:\n{strategy}"
             + f"\n\nUser profile: {profile_ctx}"
+            + extra_context
         )
 
     conversation = [{"role": "system", "content": system_content}]
@@ -684,6 +782,11 @@ Monthly plan:
   Goals: {[g['name'] for g in state.get('goals', [])]}
   Approved strategy: {state.get('approved_strategy', {}).get('plan_text', 'Not yet defined')[:200]}
 """
+
+    # Ground the tax section in the curated sources when any are indexed.
+    context += _tax_rag_context(
+        "German ETF capital gains tax, Vorabpauschale, Sparerpauschbetrag allowance"
+    )
 
     response = client.chat.completions.create(
         model="gpt-4o",

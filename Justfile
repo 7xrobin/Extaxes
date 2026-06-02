@@ -8,4 +8,4 @@ static:
     uv run python manage.py collectstatic --noinput
 
 test:
-    uv run python manage.py test agent portfolio chat digest --verbosity=2
+    uv run python manage.py test agent portfolio chat digest rag --verbosity=2

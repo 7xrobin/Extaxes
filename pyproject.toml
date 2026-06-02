@@ -9,9 +9,11 @@ dependencies = [
     "langchain-openai~=0.2",
     "langgraph~=0.2",
     "langgraph-checkpoint-sqlite>=3.0.3",
+    "numpy~=2.0",
     "openai~=1.30",
     "pandas~=2.2",
     "python-dotenv~=1.0",
+    "requests~=2.31",
     "whitenoise~=6.7",
     "yfinance~=0.2",
 ]

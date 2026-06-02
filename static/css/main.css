@@ -389,3 +389,28 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
 .ai-review-text { font-size: 0.85rem; line-height: 1.7; color: var(--text);
                   border-top: 1px solid var(--border); padding-top: 0.75rem;
                   white-space: pre-wrap; }
+
+/* ── Time-range selector (Portfolio holdings) ──────────────────────────────── */
+.range-selector { display: flex; gap: 0.35rem; margin: 0.25rem 0 1rem; flex-wrap: wrap; }
+.range-btn { background: transparent; border: 1px solid var(--border); color: var(--muted);
+             padding: 0.3rem 0.7rem; border-radius: var(--radius); cursor: pointer;
+             font-size: 0.8rem; transition: background 0.15s, color 0.15s; }
+.range-btn:hover { background: var(--border); color: var(--text); }
+.range-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* ── Growth Simulation card ────────────────────────────────────────────────── */
+.sim-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+              gap: 0.75rem; }
+.sim-field { display: flex; flex-direction: column; gap: 0.3rem; color: var(--muted);
+             font-size: 0.78rem; }
+.sim-input { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+             padding: 0.45rem 0.6rem; border-radius: var(--radius); font-size: 0.9rem; }
+.sim-input:focus { border-color: var(--accent); outline: none; }
+.sim-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+               gap: 0.75rem; margin-bottom: 0.5rem; }
+.sim-stat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.sim-stat-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+                  letter-spacing: 0.04em; }
+.sim-stat-value { font-size: 1.15rem; font-weight: 600; }
+#sim-chart { max-height: 240px; margin-top: 0.5rem; }

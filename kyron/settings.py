@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "portfolio",
     "chat",
     "digest",
+    "rag",
 ]
 
 MIDDLEWARE = [
@@ -93,6 +94,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Embedding model for the tax-source RAG index (rag app)
+RAG_EMBEDDING_MODEL = "text-embedding-3-small"
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/chat/'
