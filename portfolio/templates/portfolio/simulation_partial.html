@@ -1,0 +1,27 @@
+<div class="sim-summary">
+  <div class="sim-stat">
+    <span class="sim-stat-label">Projected value (gross)</span>
+    <span class="sim-stat-value gain-pos">€{{ proj.final_gross|floatformat:0 }}</span>
+  </div>
+  <div class="sim-stat">
+    <span class="sim-stat-label">After German tax (net)</span>
+    <span class="sim-stat-value">€{{ proj.final_net|floatformat:0 }}</span>
+  </div>
+  <div class="sim-stat">
+    <span class="sim-stat-label">Total contributed</span>
+    <span class="sim-stat-value" style="color:var(--muted);">€{{ proj.total_contributed|floatformat:0 }}</span>
+  </div>
+  <div class="sim-stat">
+    <span class="sim-stat-label">Projected gain</span>
+    <span class="sim-stat-value gain-pos">€{{ proj.total_gain|floatformat:0 }}</span>
+  </div>
+</div>
+
+<p class="note" style="margin:0.5rem 0 0.75rem;">
+  Assumes €{{ proj.inputs.start_amount|floatformat:0 }} start, €{{ proj.inputs.monthly_contribution|floatformat:0 }}/month,
+  {{ proj.inputs.annual_return_pct|floatformat:0 }}%/yr average return over {{ proj.inputs.years }} years.
+  Tax ≈ {{ proj.effective_rate_pct|floatformat:1 }}% on gains if fully sold at the end. Educational estimate — not advice.
+</p>
+
+<canvas id="sim-chart" height="220"></canvas>
+{{ proj|json_script:"sim-data" }}

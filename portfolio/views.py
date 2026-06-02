@@ -6,11 +6,21 @@ from django.template.loader import render_to_string
 import pandas as pd
 import io
 import json
+from datetime import date
 import yfinance as yf
 from openai import OpenAI
 from .models import UserProfile, Holding, ExitRule
 from agent.tax_engine import tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit
-from agent.price_service import get_price, get_prices
+from agent.price_service import (
+    get_price, get_prices, get_period_start_prices, get_period_returns, PERIOD_MAP,
+)
+from agent.simulation import project_growth, DEFAULT_ANNUAL_RETURN_PCT
+
+
+PERIOD_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "1Y": "1 year", "YTD": "YTD"}
+
+# Order periods are offered in the Discover dropdown (shortest → longest, YTD last).
+DISCOVER_PERIODS = ["1M", "3M", "6M", "YTD", "1Y"]
 
 
 _CATEGORY_COLORS = ['#4f8ef7', '#3ecf8e', '#f87171', '#f7c948', '#a78bfa', '#fb923c']
@@ -50,29 +60,120 @@ def _get_or_create_profile(user_id: str):
     return profile
 
 
+def _refresh_prices(holdings):
+    """Fetch live prices and recompute all-time gain on each holding (persisted)."""
+    tickers = [h.ticker for h in holdings]
+    prices = get_prices(tickers) if tickers else {}
+    for h in holdings:
+        price = prices.get(h.ticker, h.current_price)
+        cost = h.units * h.avg_purchase_price
+        h.current_price = price
+        h.current_value = h.units * price
+        h.unrealised_gain = h.current_value - cost
+        h.unrealised_gain_pct = (h.unrealised_gain / cost * 100) if cost > 0 else 0
+        h.save(update_fields=[
+            "current_price", "current_value", "unrealised_gain", "unrealised_gain_pct",
+        ])
+
+
+def _humanize_since(d):
+    """A compact 'how long ago' string for a date, e.g. '2y 3m', '5m', '12d'."""
+    if not d:
+        return None
+    days = max(0, (date.today() - d).days)
+    years, rem = divmod(days, 365)
+    months = rem // 30
+    if years:
+        return f"{years}y {months}m" if months else f"{years}y"
+    if months:
+        return f"{months}m"
+    return f"{days}d"
+
+
+def _earliest_purchase(holdings):
+    """Oldest purchase_date across holdings (the portfolio's holding age), or None."""
+    dates = [h.purchase_date for h in holdings if h.purchase_date]
+    return min(dates) if dates else None
+
+
+def _weighted_annual_return(holdings):
+    """
+    Value-weighted trailing 12-month return (%) across the holdings — the blended
+    'average annual gain' of the ETFs/stocks actually owned. Falls back to the
+    default assumption when no holding has usable 1Y price history.
+    """
+    if not holdings:
+        return DEFAULT_ANNUAL_RETURN_PCT
+    start_prices = get_period_start_prices([h.ticker for h in holdings], "1Y")
+    weighted = base = 0.0
+    for h in holdings:
+        sp = start_prices.get(h.ticker, 0.0)
+        if sp > 0 and h.current_price and h.current_value > 0:
+            ret = (h.current_price - sp) / sp * 100.0
+            weighted += h.current_value * ret
+            base += h.current_value
+    return round(weighted / base, 2) if base > 0 else DEFAULT_ANNUAL_RETURN_PCT
+
+
+def _totals_dict(holdings, rng="ALL", start_prices=None):
+    """
+    Build the header stats for portfolio/totals.html for the given time range.
+    'ALL' compares against cost basis (all-time); a period compares against the
+    price at the start of that window (using start_prices, fetched if not given).
+    """
+    rng = (rng or "ALL").upper()
+    total_value = sum(h.current_value for h in holdings)
+    total_invested = sum(h.units * h.avg_purchase_price for h in holdings)
+    holding_since = _earliest_purchase(holdings)
+    holding_for = _humanize_since(holding_since)
+
+    if rng == "ALL" or rng not in PERIOD_MAP:
+        total_gain = total_value - total_invested
+        return {
+            "total_value": total_value,
+            "secondary_label": "Invested",
+            "secondary_value": total_invested,
+            "gain_label": "Gain (All time)",
+            "gain_value": total_gain,
+            "gain_pct": (total_gain / total_invested * 100) if total_invested > 0 else 0,
+            "holding_since": holding_since,
+            "holding_for": holding_for,
+        }
+
+    if start_prices is None:
+        start_prices = get_period_start_prices([h.ticker for h in holdings], rng)
+    tracked_current = period_start_total = 0.0
+    for h in holdings:
+        sp = start_prices.get(h.ticker, 0.0)
+        if sp:
+            tracked_current += h.current_value
+            period_start_total += h.units * sp
+    period_gain = tracked_current - period_start_total
+    label = PERIOD_LABELS.get(rng, rng)
+    return {
+        "total_value": total_value,
+        "secondary_label": f"Value {label} ago",
+        "secondary_value": period_start_total,
+        "gain_label": f"Gain (Past {label})",
+        "gain_value": period_gain,
+        "gain_pct": (period_gain / period_start_total * 100) if period_start_total > 0 else 0,
+        "holding_since": holding_since,
+        "holding_for": holding_for,
+    }
+
+
 @login_required
 def overview(request):
     profile = _get_or_create_profile(str(request.user.id))
     holdings = list(profile.holdings.select_related("exit_rule").all())
 
-    tickers = [h.ticker for h in holdings]
-    prices = get_prices(tickers) if tickers else {}
-
-    for h in holdings:
-        price = prices.get(h.ticker, h.current_price)
-        cost  = h.units * h.avg_purchase_price
-        h.current_price       = price
-        h.current_value       = h.units * price
-        h.unrealised_gain     = h.current_value - cost
-        h.unrealised_gain_pct = (h.unrealised_gain / cost * 100) if cost > 0 else 0
-        h.save(update_fields=[
-            "current_price", "current_value", "unrealised_gain", "unrealised_gain_pct"
-        ])
+    _refresh_prices(holdings)
 
     total_invested = sum(h.units * h.avg_purchase_price for h in holdings)
     total_value    = sum(h.current_value for h in holdings)
     total_gain     = total_value - total_invested
     gain_pct       = (total_gain / total_invested * 100) if total_invested > 0 else 0
+    totals         = _totals_dict(holdings, "ALL")
 
     strategy_data = profile.approved_strategy_data or None
     target_amount = (strategy_data or {}).get("total_target_amount") if strategy_data else None
@@ -99,11 +200,18 @@ def overview(request):
         "total_value":         total_value,
         "total_gain":          total_gain,
         "gain_pct":            gain_pct,
+        "totals":              totals,
         "strategy_data":       strategy_data,
         "target_amount":       target_amount,
         "coverage_pct":        coverage_pct,
         "category_coverage":   category_coverage,
         "holdings_chart_data": holdings_chart_data,
+        # Growth Simulation tab defaults — return is the blended trailing 1Y
+        # gain of the holdings themselves (falls back to the long-run default).
+        "sim_start_amount":    round(total_value),
+        "sim_monthly":         round(profile.monthly_investment_budget),
+        "sim_years":           10,
+        "sim_return_pct":      _weighted_annual_return(holdings),
     })
 
 
@@ -130,7 +238,7 @@ def upload_csv(request):
             ticker = str(row.get("ticker", "")).strip()
             if not ticker:
                 continue
-            h, _ = Holding.objects.update_or_create(
+            h, created = Holding.objects.update_or_create(
                 profile=profile,
                 ticker=ticker,
                 defaults={
@@ -140,6 +248,9 @@ def upload_csv(request):
                     "avg_purchase_price": float(row.get("avg_purchase_price", 0)),
                 },
             )
+            if h.purchase_date is None:
+                h.purchase_date = date.today()
+                h.save(update_fields=["purchase_date"])
             ExitRule.objects.get_or_create(holding=h)
     except Exception as e:
         return HttpResponse(f"Error parsing CSV: {e}", status=400)
@@ -159,6 +270,7 @@ def add_manual(request):
         asset_type         = request.POST["asset_type"],
         units              = float(request.POST["units"]),
         avg_purchase_price = float(request.POST["avg_purchase_price"]),
+        purchase_date      = date.today(),
     )
     ExitRule.objects.create(holding=h)
     return redirect("/portfolio/")
@@ -166,10 +278,47 @@ def add_manual(request):
 
 @login_required
 def holdings_partial(request):
-    """HTMX partial for the holdings table."""
+    """
+    HTMX partial for the holdings table. Shows each holding's all-time gain/loss
+    versus its average purchase price, and OOB-swaps the header totals to match.
+    """
     profile  = _get_or_create_profile(str(request.user.id))
-    holdings = profile.holdings.select_related("exit_rule").all()
-    return render(request, "portfolio/holdings.html", {"holdings": holdings})
+    holdings = list(profile.holdings.select_related("exit_rule").all())
+
+    _refresh_prices(holdings)
+
+    totals = _totals_dict(holdings, "ALL")
+    totals_html = render_to_string("portfolio/totals.html", {"totals": totals})
+    table_html = render_to_string("portfolio/holdings.html", {"holdings": holdings})
+    oob = f'<div id="portfolio-totals" hx-swap-oob="true">{totals_html}</div>'
+    return HttpResponse(table_html + oob)
+
+
+@login_required
+@require_POST
+def simulate_partial(request):
+    """HTMX partial — projected growth from start amount + monthly contributions."""
+    def _f(name, default):
+        try:
+            return float(request.POST.get(name, default) or default)
+        except (TypeError, ValueError):
+            return float(default)
+
+    start_amount = _f("start_amount", 0)
+    monthly      = _f("monthly_contribution", 0)
+    return_pct   = _f("annual_return_pct", DEFAULT_ANNUAL_RETURN_PCT)
+    years        = int(_f("years", 10))
+    years        = max(1, min(years, 50))
+    asset_type   = request.POST.get("asset_type", "etf_acc")
+
+    proj = project_growth(
+        start_amount=start_amount,
+        monthly_contribution=monthly,
+        annual_return_pct=return_pct,
+        years=years,
+        asset_type=asset_type,
+    )
+    return render(request, "portfolio/simulation_partial.html", {"proj": proj})
 
 
 @login_required
@@ -268,6 +417,11 @@ def suggestions_partial(request):
     prices = get_prices(tickers)
     for s in suggestions:
         s["current_price"] = prices.get(s["ticker"], 0.0)
+        returns = get_period_returns(s["ticker"])
+        s["period_perf"] = [
+            {"code": code, "label": PERIOD_LABELS.get(code, code), "gain": returns.get(code, 0.0)}
+            for code in DISCOVER_PERIODS
+        ]
     return render(request, "portfolio/suggestions_partial.html", {"suggestions": suggestions})
 
 
@@ -300,6 +454,7 @@ def quick_add(request):
             'current_price':      current_price,
             'current_value':      units * current_price,
             'plan_category':      plan_category,
+            'purchase_date':      date.today(),
         },
     )
     if not created:

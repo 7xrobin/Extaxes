@@ -24,29 +24,64 @@
   <div class="card">
     <div class="holdings-top-header">
       <h3>Holdings</h3>
-      <div class="holdings-top-stats">
-        <div class="holdings-stat">
-          <span class="holdings-stat-label">Total Value</span>
-          <span class="holdings-stat-value">€{{ total_value|floatformat:0 }}</span>
-        </div>
-        <div class="holdings-stat">
-          <span class="holdings-stat-label">Invested</span>
-          <span class="holdings-stat-value" style="color:var(--muted);">€{{ total_invested|floatformat:0 }}</span>
-        </div>
-        <div class="holdings-stat">
-          <span class="holdings-stat-label">Gain</span>
-          <span class="holdings-stat-value {% if total_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
-            {% if total_gain >= 0 %}+{% endif %}€{{ total_gain|floatformat:0 }}<span class="holdings-stat-pct">&nbsp;({% if gain_pct >= 0 %}+{% endif %}{{ gain_pct|floatformat:1 }}%)</span>
-          </span>
-        </div>
+      <div id="portfolio-totals">
+        {% include "portfolio/totals.html" with totals=totals %}
       </div>
     </div>
-    <div class="holdings-top-table"
-         hx-get="/portfolio/holdings/"
-         hx-trigger="load"
-         hx-target="this"
-         hx-swap="innerHTML">
-      <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
+    <div class="tabs" id="holdings-tabs">
+      <button class="tab active" onclick="switchHoldingsTab(this,'holdings')">Holdings</button>
+      <button class="tab"        onclick="switchHoldingsTab(this,'simulation')">Simulation</button>
+    </div>
+
+    <div class="tab-panel active" id="htab-holdings">
+      <div class="holdings-top-table"
+           hx-get="/portfolio/holdings/"
+           hx-trigger="load"
+           hx-target="this"
+           hx-swap="innerHTML">
+        <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="htab-simulation">
+      <p class="note" style="margin-bottom:1rem;">
+        Projects how your portfolio could grow with regular monthly contributions. The default
+        return is the value-weighted trailing 12-month gain of the ETFs/stocks you actually hold
+        ({{ sim_return_pct|floatformat:1 }}%/yr) — tweak any input to explore. Shows value before
+        and after German capital-gains tax.
+      </p>
+      <form class="sim-form"
+            hx-post="/portfolio/simulate/"
+            hx-target="#sim-output"
+            hx-swap="innerHTML"
+            hx-trigger="load, submit, change delay:350ms">
+        {% csrf_token %}
+        <div class="sim-inputs">
+          <label class="sim-field">Start amount (€)
+            <input class="sim-input" type="number" name="start_amount" value="{{ sim_start_amount }}" min="0" step="any">
+          </label>
+          <label class="sim-field">Monthly (€)
+            <input class="sim-input" type="number" name="monthly_contribution" value="{{ sim_monthly }}" min="0" step="any">
+          </label>
+          <label class="sim-field">Years
+            <input class="sim-input" type="number" name="years" value="{{ sim_years }}" min="1" max="50" step="1">
+          </label>
+          <label class="sim-field">Return %/yr
+            <input class="sim-input" type="number" name="annual_return_pct" value="{{ sim_return_pct }}" min="0" max="50" step="any">
+          </label>
+          <label class="sim-field">Asset type
+            <select class="sim-input" name="asset_type">
+              <option value="etf_acc">Accumulating ETF</option>
+              <option value="etf_dist">Distributing ETF</option>
+              <option value="stock">Individual Stock</option>
+            </select>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-sm" style="margin-top:0.75rem;">Simulate</button>
+      </form>
+      <div id="sim-output" style="margin-top:1rem;">
+        <div class="suggestions-loading"><span class="spinner"></span><span>Projecting…</span></div>
+      </div>
     </div>
   </div>
 
@@ -208,6 +243,16 @@
   {% endif %}
 
   <script>
+  function switchHoldingsTab(btn, name) {
+    document.querySelectorAll('#holdings-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('#holdings-tabs ~ .tab-panel').forEach(function(p){ p.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    var panel = document.getElementById('htab-' + name);
+    if (panel) panel.classList.add('active');
+    // Chart.js sizes to 0 inside a hidden panel — re-render once it's visible.
+    if (name === 'simulation') renderSimChart();
+  }
+
   function switchDiscoverTab(btn, name) {
     document.querySelectorAll('#discover-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
     document.querySelectorAll('#discover-tabs ~ .tab-panel').forEach(function(p){ p.classList.remove('active'); });
@@ -327,12 +372,53 @@
     }
   }
 
+  var simChart = null;
+
+  function renderSimChart() {
+    var el = document.getElementById('sim-data');
+    if (!el) return;
+    var proj;
+    try { proj = JSON.parse(el.textContent); } catch (e) { return; }
+    var canvas = document.getElementById('sim-chart');
+    if (!canvas) return;
+    if (!window.Chart) { setTimeout(renderSimChart, 300); return; }
+
+    var series = proj.series || [];
+    var labels = series.map(function(p){ return 'Y' + p.year; });
+    var contributed = series.map(function(p){ return Math.round(p.contributed); });
+    var gross = series.map(function(p){ return Math.round(p.value); });
+    var eff = (proj.effective_rate_pct || 0) / 100;
+    var net = series.map(function(p){ return Math.round(p.contributed + p.gain * (1 - eff)); });
+
+    if (simChart) simChart.destroy();
+    simChart = new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: [
+        { label: 'Value (gross)', data: gross, borderColor: '#3ecf8e', backgroundColor: 'rgba(62,207,142,0.10)', fill: true, tension: 0.25, pointRadius: 0 },
+        { label: 'After tax (net)', data: net, borderColor: '#4f8ef7', fill: false, tension: 0.25, borderDash: [5,4], pointRadius: 0 },
+        { label: 'Contributed', data: contributed, borderColor: '#f7c948', fill: false, tension: 0.25, pointRadius: 0 }
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#cbd2e0', boxWidth: 12 } },
+          tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.dataset.label + ': €' + ctx.parsed.y.toLocaleString(); } } }
+        },
+        scales: {
+          x: { ticks: { color: '#8a92a6' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#8a92a6', callback: function(v){ return '€' + Math.round(v/1000) + 'k'; } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     if (document.getElementById('strategy-json')) updateAllocChart();
     updateHoldingsChart();
   });
   document.body.addEventListener('htmx:afterSwap', function(){
     updateAllocChart();
+    renderSimChart();
   });
   </script>
 </div>

@@ -390,13 +390,13 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
                   border-top: 1px solid var(--border); padding-top: 0.75rem;
                   white-space: pre-wrap; }
 
-/* ── Time-range selector (Portfolio holdings) ──────────────────────────────── */
-.range-selector { display: flex; gap: 0.35rem; margin: 0.25rem 0 1rem; flex-wrap: wrap; }
-.range-btn { background: transparent; border: 1px solid var(--border); color: var(--muted);
-             padding: 0.3rem 0.7rem; border-radius: var(--radius); cursor: pointer;
-             font-size: 0.8rem; transition: background 0.15s, color 0.15s; }
-.range-btn:hover { background: var(--border); color: var(--text); }
-.range-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+/* ── Discover suggestion performance dropdown ──────────────────────────────── */
+.suggestion-perf { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; }
+.suggestion-perf-label { font-size: 0.75rem; color: var(--muted); }
+.suggestion-period { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+                     padding: 0.2rem 0.45rem; border-radius: var(--radius); font-size: 0.78rem;
+                     cursor: pointer; }
+.suggestion-period-gain { font-size: 0.85rem; font-weight: 600; }
 
 /* ── Growth Simulation card ────────────────────────────────────────────────── */
 .sim-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

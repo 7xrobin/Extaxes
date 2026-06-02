@@ -35,6 +35,15 @@
           {% endif %}
         </div>
         <div class="suggestion-rationale">{{ s.rationale }}</div>
+        <div class="suggestion-perf">
+          <span class="suggestion-perf-label">Gain over</span>
+          <select class="suggestion-period" onchange="updatePeriodGain(this)">
+            {% for p in s.period_perf %}
+            <option value="{{ p.code }}" data-gain="{{ p.gain|floatformat:2 }}">Past {{ p.label }}</option>
+            {% endfor %}
+          </select>
+          <span class="suggestion-period-gain"></span>
+        </div>
       </div>
     </label>
 
@@ -87,6 +96,16 @@ function toggleAddForm(slug) {
   if (!form) return;
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
 }
+
+function updatePeriodGain(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  var g = parseFloat(opt.getAttribute('data-gain')) || 0;
+  var span = sel.parentElement.querySelector('.suggestion-period-gain');
+  if (!span) return;
+  span.textContent = (g >= 0 ? '+' : '') + g.toFixed(1) + '%';
+  span.className = 'suggestion-period-gain ' + (g >= 0 ? 'gain-pos' : 'gain-neg');
+}
+document.querySelectorAll('.suggestion-period').forEach(updatePeriodGain);
 </script>
 
 {% else %}

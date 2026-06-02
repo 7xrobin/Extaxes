@@ -1,0 +1,22 @@
+<div class="holdings-top-stats">
+  <div class="holdings-stat">
+    <span class="holdings-stat-label">Total Value</span>
+    <span class="holdings-stat-value">€{{ totals.total_value|floatformat:0 }}</span>
+  </div>
+  <div class="holdings-stat">
+    <span class="holdings-stat-label">{{ totals.secondary_label }}</span>
+    <span class="holdings-stat-value" style="color:var(--muted);">€{{ totals.secondary_value|floatformat:0 }}</span>
+  </div>
+  <div class="holdings-stat">
+    <span class="holdings-stat-label">{{ totals.gain_label }}</span>
+    <span class="holdings-stat-value {% if totals.gain_value >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
+      {% if totals.gain_value >= 0 %}+{% endif %}€{{ totals.gain_value|floatformat:0 }}<span class="holdings-stat-pct">&nbsp;({% if totals.gain_pct >= 0 %}+{% endif %}{{ totals.gain_pct|floatformat:1 }}%)</span>
+    </span>
+  </div>
+  <div class="holdings-stat">
+    <span class="holdings-stat-label">Holding for</span>
+    <span class="holdings-stat-value">
+      {% if totals.holding_for %}{{ totals.holding_for }}<span class="holdings-stat-pct" title="Oldest holding since {{ totals.holding_since|date:'j M Y' }}">&nbsp;(since {{ totals.holding_since|date:"M Y" }})</span>{% else %}<span style="color:var(--muted);">—</span>{% endif %}
+    </span>
+  </div>
+</div>
