@@ -14,8 +14,9 @@ from agent.tax_engine import (
 )
 from agent.nodes import (
     _extract_number, _parse_goals, _estimate_tax_bracket,
-    _msg_role, _msg_content, route_after_intake, route_after_approval,
-    intake_node, analysis_node,
+    _msg_role, _msg_content, route_after_intake, route_after_qa,
+    intake_node, analysis_node, fetch_prices_node,
+    retrieve_node, simulate_node,
 )
 
 
@@ -325,17 +326,82 @@ class RouteAfterIntakeTest(unittest.TestCase):
         self.assertEqual(route_after_intake({}), "continue_intake")
 
 
-class RouteAfterApprovalTest(unittest.TestCase):
-    def test_routes_to_done_when_approved(self):
-        state = {"current_node": "done"}
-        self.assertEqual(route_after_approval(state), "done")
+class RouteAfterQaTest(unittest.TestCase):
+    def test_save_routes_to_approval(self):
+        self.assertEqual(route_after_qa({"current_node": "save"}), "approval")
 
-    def test_routes_to_adjust_otherwise(self):
-        state = {"current_node": "approval"}
-        self.assertEqual(route_after_approval(state), "adjust")
+    def test_adjust_routes_to_plan(self):
+        self.assertEqual(route_after_qa({"current_node": "adjust"}), "plan")
 
-    def test_routes_to_adjust_when_key_missing(self):
-        self.assertEqual(route_after_approval({}), "adjust")
+    def test_answer_routes_to_answer_pipeline(self):
+        self.assertEqual(route_after_qa({"current_node": "answer"}), "answer")
+
+    def test_missing_node_defaults_to_answer(self):
+        self.assertEqual(route_after_qa({}), "answer")
+
+
+# ── Tool Nodes ────────────────────────────────────────────────────────────────
+
+class FetchPricesNodeTest(unittest.TestCase):
+    @patch("agent.nodes.fetch_prices")
+    def test_stores_prices_in_state(self, mock_fetch):
+        mock_fetch.return_value = {"VWCE.DE": 100.0}
+        state = {"holdings": [{"ticker": "VWCE.DE"}]}
+        result = fetch_prices_node(state)
+        self.assertEqual(result["prices"], {"VWCE.DE": 100.0})
+        self.assertEqual(result["current_node"], "analysis")
+        mock_fetch.assert_called_once_with(["VWCE.DE"])
+
+    @patch("agent.nodes.fetch_prices")
+    def test_empty_holdings_fetches_no_tickers(self, mock_fetch):
+        mock_fetch.return_value = {}
+        result = fetch_prices_node({"holdings": []})
+        self.assertEqual(result["prices"], {})
+        mock_fetch.assert_called_once_with([])
+
+
+class RetrieveNodeTest(unittest.TestCase):
+    @patch("agent.nodes.retrieve_tax_context")
+    def test_stores_retrieved_context_for_last_user_message(self, mock_retrieve):
+        mock_retrieve.return_value = "SOURCES..."
+        state = {"messages": [
+            {"role": "assistant", "content": "plan"},
+            {"role": "user", "content": "how does Vorabpauschale work?"},
+        ]}
+        result = retrieve_node(state)
+        self.assertEqual(result["retrieved_context"], "SOURCES...")
+        mock_retrieve.assert_called_once_with("how does Vorabpauschale work?")
+
+
+class SimulateNodeTest(unittest.TestCase):
+    @patch("agent.nodes.compute_projection")
+    def test_stores_projection_context(self, mock_proj):
+        mock_proj.return_value = "PROJECTION..."
+        state = {"messages": [{"role": "user", "content": "how much in 10 years?"}]}
+        result = simulate_node(state)
+        self.assertEqual(result["projection_context"], "PROJECTION...")
+        # called with (query, state-as-dict)
+        self.assertEqual(mock_proj.call_args[0][0], "how much in 10 years?")
+
+
+# ── Analysis consumes prices from state ───────────────────────────────────────
+
+class AnalysisUsesStatePricesTest(unittest.TestCase):
+    @patch("agent.nodes.get_prices")
+    def test_prefers_state_prices_over_fetching(self, mock_get_prices):
+        state = {
+            "holdings": [{
+                "ticker": "VWCE.DE", "isin": "", "asset_type": "etf_acc",
+                "units": 10.0, "avg_purchase_price": 100.0, "purchase_date": "",
+                "current_price": 0.0, "current_value": 0.0,
+                "unrealised_gain": 0.0, "unrealised_gain_pct": 0.0,
+            }],
+            "prices": {"VWCE.DE": 130.0},
+            "is_married": False,
+        }
+        result = analysis_node(state)
+        self.assertAlmostEqual(result["holdings"][0]["current_value"], 1300.0)
+        mock_get_prices.assert_not_called()
 
 
 # ── Intake Node ───────────────────────────────────────────────────────────────

@@ -1,8 +1,14 @@
 """
 LangGraph node functions.
+
+Agent capabilities (live prices, tax-source RAG, growth projections) live in
+agent/tools.py as traceable tools. The nodes below are thin wrappers that invoke
+those tools and write their results into graph state, so each tool is both a
+LangSmith span and an explicit node on the graph.
 """
 import json
 import re
+import logging
 from django.conf import settings
 from django.utils import timezone
 from openai import OpenAI
@@ -13,99 +19,13 @@ from .tax_engine import (
     exit_tax_applies, effective_rate,
 )
 from .price_service import get_prices
-from .simulation import (
-    DEFAULT_ANNUAL_RETURN_PCT, project_growth,
-    recommend_investment, required_monthly_for_target,
-)
+from .observability import instrument_openai
+from .tools import fetch_prices, retrieve_tax_context, compute_projection
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+logger = logging.getLogger("agent.nodes")
 
-
-# ── RAG + DETERMINISTIC TOOLS ──────────────────────────────────────────────────
-
-def _tax_rag_context(query: str) -> str:
-    """
-    Retrieve trusted tax-source passages for `query`. Import is guarded so the
-    graph keeps working when the rag app has no indexed sources (or none match).
-    Returns a prompt-ready, source-cited block, or "" when nothing relevant.
-    """
-    try:
-        from rag.retriever import build_context
-        ctx = build_context(query)
-    except Exception:
-        return ""
-    if not ctx:
-        return ""
-    return (
-        "\n\nTRUSTED TAX SOURCES — treat these as the PRIMARY source of truth for any "
-        "tax question. Prefer them over your own assumptions, and cite the source URL "
-        "in your answer when you use them:\n" + ctx
-    )
-
-
-_PROJECTION_KEYWORDS = (
-    "how much", "simulate", "simulation", "project", "projection", "grow to",
-    "worth in", "in 10 years", "in 5 years", "in 20 years", "future value",
-    "compound", "to reach", "to hit", "per month to", "each month to",
-)
-
-
-def _projection_context(query: str, state: dict) -> str:
-    """
-    If the user is asking a how-much / projection question, compute the figures
-    deterministically (the LLM must not do the math) and return a prompt block
-    with exact numbers. Returns "" when the question isn't projection-related.
-    """
-    q = (query or "").lower()
-    if not any(kw in q for kw in _PROJECTION_KEYWORDS):
-        return ""
-
-    start_amount = float(state.get("total_current_value", 0) or 0)
-    monthly = float(state.get("monthly_investment_budget", 0) or 0)
-
-    years_match = re.search(r"(\d{1,2})\s*(?:year|yr)", q)
-    years = int(years_match.group(1)) if years_match else 10
-
-    proj = project_growth(
-        start_amount=start_amount,
-        monthly_contribution=monthly,
-        annual_return_pct=DEFAULT_ANNUAL_RETURN_PCT,
-        years=years,
-    )
-    rec = recommend_investment(
-        state.get("investable_surplus", 0), monthly
-    )
-
-    lines = [
-        "\n\nCOMPUTED PROJECTION (use these EXACT figures — do not recalculate):",
-        f"- Assumptions: start €{proj['inputs']['start_amount']:,.0f}, "
-        f"€{proj['inputs']['monthly_contribution']:,.0f}/month, "
-        f"{proj['inputs']['annual_return_pct']:.0f}%/yr avg return, "
-        f"{years} years, accumulating world ETF.",
-        f"- Total contributed over the period: €{proj['total_contributed']:,.0f}",
-        f"- Projected value (gross): €{proj['final_gross']:,.0f}",
-        f"- Projected gain: €{proj['total_gain']:,.0f}",
-        f"- Estimated German tax if fully sold at the end "
-        f"(~{proj['effective_rate_pct']:.1f}% effective): €{proj['tax_on_gain']:,.0f}",
-        f"- Projected value after tax (net): €{proj['final_net']:,.0f}",
-        f"- 'How much to invest' from their own numbers: lump sum available "
-        f"€{rec['lump_sum_available']:,.0f}, plus €{rec['monthly_contribution']:,.0f}/month.",
-    ]
-
-    # If they named a target amount, also solve for the required monthly contribution.
-    target_match = re.search(r"(?:reach|hit|get to|target of)\s*€?\s*([\d.,]+)\s*(k|m)?", q)
-    if target_match:
-        target = _extract_number(target_match.group(0))
-        if target > 0:
-            need = required_monthly_for_target(
-                target, years, DEFAULT_ANNUAL_RETURN_PCT, start_amount
-            )
-            lines.append(
-                f"- To reach €{target:,.0f} in {years} years from €{start_amount:,.0f}, "
-                f"they'd need about €{need:,.0f}/month."
-            )
-
-    return "\n".join(lines)
+# OpenAI client, instrumented for LangSmith when tracing is enabled (no-op otherwise).
+client = instrument_openai(OpenAI(api_key=settings.OPENAI_API_KEY))
 
 
 def _msg_role(m) -> str:
@@ -341,15 +261,31 @@ def upload_node(state: AgentState) -> AgentState:
     }
 
 
+# ── FETCH-PRICES TOOL NODE ────────────────────────────────────────────────────
+
+def fetch_prices_node(state: AgentState) -> AgentState:
+    """
+    Tool node: pulls live prices for the current holdings and stores them in
+    state so the (pure-calculation) analysis node can stay LLM- and IO-free.
+    """
+    holdings = state.get("holdings", [])
+    tickers = [h["ticker"] for h in holdings]
+    logger.info("fetch_prices_node: fetching %d ticker(s)", len(tickers))
+    prices = fetch_prices(tickers)
+    return {**state, "prices": prices, "current_node": "analysis"}
+
+
 # ── ANALYSIS NODE ─────────────────────────────────────────────────────────────
 
 def analysis_node(state: AgentState) -> AgentState:
-    """Pure calculation — no LLM. Fetches live prices, computes gains and tax."""
+    """Pure calculation — no LLM. Consumes prices from the fetch_prices node."""
     holdings = state.get("holdings", [])
     is_married = state.get("is_married", False)
 
     tickers = [h["ticker"] for h in holdings]
-    prices = get_prices(tickers)
+    # Prefer prices populated by fetch_prices_node; fall back to a direct fetch so
+    # analysis_node remains correct when called on its own (e.g. in unit tests).
+    prices = state["prices"] if "prices" in state else get_prices(tickers)
 
     updated = []
     total_invested = 0.0
@@ -611,10 +547,122 @@ Rules:
 - This is educational — not personal investment advice."""
 
 
+def _last_user_message(messages) -> str:
+    """Most recent user-authored message content, or "" if none."""
+    return next(
+        (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"), ""
+    )
+
+
+_ADJUST_PHRASES = (
+    "adjust", "change", "revise", "more conservative", "more aggressive",
+    "less risk", "more risk", "different", "instead of",
+)
+_REVISE_KEYWORDS = (
+    "revise plan", "change plan", "new plan", "redo plan", "update strategy",
+)
+
+
+def _classify_intent(last_user: str) -> str:
+    """
+    Classify a pending-approval message as approve / adjust / question via the LLM,
+    with a defensive phrase guard so a stray "adjust" can't re-trigger planning
+    without an explicit change request. Returns one of those three words.
+    """
+    intent_resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": _APPROVAL_CLASSIFIER_PROMPT},
+            {"role": "user",   "content": last_user},
+        ],
+        max_tokens=3,
+        temperature=0,
+        seed=42,
+    )
+    raw_intent = (intent_resp.choices[0].message.content or "").strip().lower()
+    first_word = raw_intent.split()[0] if raw_intent.split() else ""
+    intent = re.sub(r"[^a-z]", "", first_word)
+
+    if intent == "adjust" and not any(p in last_user.lower() for p in _ADJUST_PHRASES):
+        intent = "question"
+    return intent
+
+
 def qa_node(state: AgentState) -> AgentState:
     """
-    Universal post-plan Q&A node. Handles both pending-approval and approved states.
-    Graph interrupts BEFORE this node each turn.
+    Router at the post-plan interrupt point. Classifies the latest user message and
+    decides the path via `current_node`: "save" (approve), "adjust" (revise), or
+    "answer" (everything else). Answer generation happens downstream in answer_node,
+    after the retrieve/simulate tool nodes run — so this node never calls the answer
+    LLM itself. Graph interrupts BEFORE this node each turn.
+    """
+    messages = list(state.get("messages", []))
+    strategy_saved = state.get("strategy_saved", False)
+    last_user = _last_user_message(messages)
+
+    if not strategy_saved:
+        intent = _classify_intent(last_user)
+        logger.info("qa_node: pending-approval intent=%s", intent)
+
+        if intent == "approve":
+            return {
+                **state,
+                "current_node": "save",
+                "messages": messages + [{"role": "assistant", "content":
+                    "Got it — saving your strategy now..."
+                }],
+            }
+        if intent == "adjust":
+            return {
+                **state,
+                "current_node": "adjust",
+                "messages": messages + [{"role": "assistant", "content":
+                    "Got it — let me revise the plan with your feedback..."
+                }],
+            }
+        return {**state, "current_node": "answer"}
+
+    # Approved state: explicit plan-revision keywords route back to planning.
+    if any(kw in last_user.lower() for kw in _REVISE_KEYWORDS):
+        logger.info("qa_node: approved-state revise request detected")
+        return {**state, "current_node": "adjust"}
+
+    return {**state, "current_node": "answer"}
+
+
+def route_after_qa(state: AgentState) -> str:
+    """Map the router's decision (current_node) onto the next graph node."""
+    node = state.get("current_node", "qa")
+    if node == "save":
+        return "approval"
+    if node == "adjust":
+        return "plan"
+    return "answer"  # → retrieve → simulate → answer pipeline
+
+
+# ── TOOL NODES (RAG + PROJECTION) ─────────────────────────────────────────────
+
+def retrieve_node(state: AgentState) -> AgentState:
+    """Tool node: pull trusted tax-source passages for the latest user message."""
+    last_user = _last_user_message(list(state.get("messages", [])))
+    ctx = retrieve_tax_context(last_user)
+    return {**state, "retrieved_context": ctx}
+
+
+def simulate_node(state: AgentState) -> AgentState:
+    """Tool node: deterministic growth projection for how-much / projection asks."""
+    last_user = _last_user_message(list(state.get("messages", [])))
+    proj = compute_projection(last_user, dict(state))
+    return {**state, "projection_context": proj}
+
+
+# ── ANSWER NODE ───────────────────────────────────────────────────────────────
+
+def answer_node(state: AgentState) -> AgentState:
+    """
+    LLM answer node. Generates the Q&A reply using the tax-source and projection
+    context gathered by the retrieve/simulate tool nodes, in either pending-approval
+    or approved mode. Loops back to the qa interrupt afterwards.
     """
     messages = list(state.get("messages", []))
     strategy_saved = state.get("strategy_saved", False)
@@ -625,59 +673,12 @@ def qa_node(state: AgentState) -> AgentState:
         f"Tax bracket: {state.get('tax_bracket', 0.42) * 100:.0f}%"
     )
 
-    last_user = next(
-        (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"), ""
+    # Context produced by the tool nodes keeps numbers exact and tax answers grounded.
+    extra_context = (
+        (state.get("retrieved_context") or "") + (state.get("projection_context") or "")
     )
 
-    # While strategy is pending, classify intent before calling the LLM
     if not strategy_saved:
-        intent_resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": _APPROVAL_CLASSIFIER_PROMPT},
-                {"role": "user",   "content": last_user},
-            ],
-            max_tokens=3,
-            temperature=0,
-            seed=42,
-        )
-        raw_intent = (intent_resp.choices[0].message.content or "").strip().lower()
-        first_word = raw_intent.split()[0] if raw_intent.split() else ""
-        intent = re.sub(r"[^a-z]", "", first_word)
-
-        # Defense in depth: even if classifier says "adjust", require an
-        # explicit change phrase in the user message before re-running plan.
-        _ADJUST_PHRASES = (
-            "adjust", "change", "revise", "more conservative", "more aggressive",
-            "less risk", "more risk", "different", "instead of",
-        )
-        if intent == "adjust" and not any(p in last_user.lower() for p in _ADJUST_PHRASES):
-            intent = "question"
-
-        if intent == "approve":
-            return {
-                **state,
-                "current_node": "save",
-                "messages": messages + [{"role": "assistant", "content":
-                    "Got it — saving your strategy now..."
-                }],
-            }
-
-        if intent == "adjust":
-            return {
-                **state,
-                "current_node": "adjust",
-                "messages": messages + [{"role": "assistant", "content":
-                    "Got it — let me revise the plan with your feedback..."
-                }],
-            }
-
-    # Trusted tax sources + any deterministic projection — injected into either branch
-    # so numbers stay accurate and tax answers are grounded in the curated sources.
-    extra_context = _tax_rag_context(last_user) + _projection_context(last_user, dict(state))
-
-    if not strategy_saved:
-        # Anything other than approve/adjust (question, empty, hallucinated) → safe Q&A path
         system_content = (
             _QA_PENDING_PROMPT
             + f"\n\nProposed strategy:\n{strategy}"
@@ -699,6 +700,7 @@ def qa_node(state: AgentState) -> AgentState:
         if role in ("user", "assistant"):
             conversation.append({"role": role, "content": content})
 
+    logger.info("answer_node: generating reply (strategy_saved=%s)", strategy_saved)
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=conversation,
@@ -708,29 +710,11 @@ def qa_node(state: AgentState) -> AgentState:
     return {
         **state,
         "current_node": "qa",
+        # Clear per-turn tool context so it never leaks into a later answer.
+        "retrieved_context": "",
+        "projection_context": "",
         "messages": messages + [{"role": "assistant", "content": answer}],
     }
-
-
-def route_after_qa(state: AgentState) -> str:
-    node = state.get("current_node", "qa")
-
-    # qa_node signals approval or adjust via current_node
-    if node == "save":
-        return "approval"
-    if node == "adjust":
-        return "plan"
-
-    # Approved state: check for explicit plan-revision keywords
-    messages = list(state.get("messages", []))
-    last_user = next(
-        (_msg_content(m) for m in reversed(messages) if _msg_role(m) == "user"), ""
-    ).lower()
-    revise_keywords = ["revise plan", "change plan", "new plan", "redo plan", "update strategy"]
-    if any(kw in last_user for kw in revise_keywords):
-        return "plan"
-
-    return "qa"
 
 
 # ── DIGEST NODE ───────────────────────────────────────────────────────────────
@@ -784,7 +768,7 @@ Monthly plan:
 """
 
     # Ground the tax section in the curated sources when any are indexed.
-    context += _tax_rag_context(
+    context += retrieve_tax_context(
         "German ETF capital gains tax, Vorabpauschale, Sparerpauschbetrag allowance"
     )
 

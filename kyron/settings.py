@@ -98,6 +98,99 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Embedding model for the tax-source RAG index (rag app)
 RAG_EMBEDDING_MODEL = "text-embedding-3-small"
 
+# ── LangSmith observability ───────────────────────────────────────────────────
+# Tracing is opt-in. Set LANGSMITH_TRACING=true and LANGSMITH_API_KEY in .env to
+# stream graph runs, tool spans and LLM calls to LangSmith. We accept either the
+# new LANGSMITH_* names or the legacy LANGCHAIN_* names, and normalise them into
+# the LANGCHAIN_* env vars that LangGraph / LangSmith actually read at runtime.
+# This must happen before agent.graph is imported (Django loads settings first).
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")
+LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "kyron-investbuddy")
+LANGSMITH_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
+_LANGSMITH_TRACING = (
+    os.getenv("LANGSMITH_TRACING") or os.getenv("LANGCHAIN_TRACING_V2") or "false"
+).strip().lower() == "true"
+
+if _LANGSMITH_TRACING and LANGSMITH_API_KEY:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = LANGSMITH_API_KEY
+    os.environ["LANGCHAIN_PROJECT"] = LANGSMITH_PROJECT
+    os.environ["LANGCHAIN_ENDPOINT"] = LANGSMITH_ENDPOINT
+    LANGSMITH_TRACING = True
+else:
+    # Make sure a stale env var can't silently enable tracing without a key.
+    os.environ["LANGCHAIN_TRACING_V2"] = "false"
+    LANGSMITH_TRACING = False
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# Structured, level-controllable logging. Console for dev; a rotating file so the
+# agent/graph trail survives across restarts. Tune with DJANGO_LOG_LEVEL.
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
+
+DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
+APP_LOG_LEVEL = os.getenv("APP_LOG_LEVEL", "DEBUG" if DEBUG else "INFO").upper()
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname:<8} {name}:{lineno} {funcName}() | {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "concise": {
+            "format": "{levelname:<8} {name} | {message}",
+            "style": "{",
+        },
+    },
+    "filters": {
+        "require_debug_true": {"()": "django.utils.log.RequireDebugTrue"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "concise",
+            "level": "DEBUG",
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOGS_DIR / "kyron.log"),
+            "maxBytes": 5 * 1024 * 1024,   # 5 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+            "level": "DEBUG",
+            "encoding": "utf-8",
+        },
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # Application loggers — the agent graph, tools and Django apps.
+        **{
+            name: {
+                "handlers": ["console", "file"],
+                "level": APP_LOG_LEVEL,
+                "propagate": False,
+            }
+            for name in ("agent", "rag", "portfolio", "chat", "digest", "accounts")
+        },
+    },
+}
+
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/chat/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'

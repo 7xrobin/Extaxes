@@ -322,9 +322,14 @@ Open `http://localhost:8000` — redirects to `/chat/` and starts the intake flo
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | Yes | Used only in `plan_node` and `digest_node` |
+| `OPENAI_API_KEY` | Yes | Used in `plan_node`, `answer_node` and `digest_node` |
 | `DJANGO_SECRET_KEY` | Yes (prod) | Django session signing key |
 | `DEBUG` | No | Defaults to `True` |
+| `DJANGO_LOG_LEVEL` | No | Level for Django's own loggers. Defaults to `INFO` |
+| `APP_LOG_LEVEL` | No | Level for the app loggers (`agent`, `rag`, …). Defaults to `DEBUG` when `DEBUG=True`, else `INFO` |
+| `LANGSMITH_TRACING` | No | `true` to stream traces to LangSmith. Defaults to `false` |
+| `LANGSMITH_API_KEY` | Only if tracing | LangSmith API key (`lsv2_...`) |
+| `LANGSMITH_PROJECT` | No | LangSmith project name. Defaults to `kyron-investbuddy` |
 
 ### Running tests
 
@@ -333,6 +338,108 @@ just test
 ```
 
 132 tests covering: tax engine functions, price service (mocked yfinance), node helpers, routing logic, all portfolio views, chat view double-invoke logic, and digest view HTML escaping.
+
+---
+
+## Observability
+
+Two independent layers: **logging** (always on, local) and **LangSmith tracing**
+(opt-in, remote). Logging answers "what happened on this server"; LangSmith
+answers "what did the agent do on this run, step by step".
+
+### Logging
+
+Logging is configured in the `LOGGING` dict in `kyron/settings.py`. There are two
+formatters, two handlers, and one logger per app.
+
+| Piece | Value |
+|---|---|
+| Console handler | `concise` format (`LEVEL logger | message`) — readable in the dev server output |
+| File handler | `verbose` format (timestamp, level, `logger:lineno`, `func()`), written to `logs/kyron.log` |
+| Rotation | `RotatingFileHandler`, 5 MB per file, 5 backups (`kyron.log.1` … `kyron.log.5`) |
+| App loggers | `agent`, `rag`, `portfolio`, `chat`, `digest`, `accounts` |
+
+`logs/` is gitignored and created automatically on startup. Tune verbosity
+without touching code via the env vars:
+
+```bash
+# .env
+DJANGO_LOG_LEVEL=INFO     # Django's own loggers (requests, server, ORM)
+APP_LOG_LEVEL=DEBUG       # the agent/rag/portfolio/... loggers
+```
+
+**Using a logger in code.** Get a logger named after the app (so it inherits the
+configured handlers and level) and log at the appropriate level — never `print`:
+
+```python
+import logging
+
+logger = logging.getLogger("agent.nodes")   # or __name__ inside an app module
+
+logger.debug("fetch_prices: resolved %d/%d tickers", hits, total)
+logger.info("answer_node: generating reply (strategy_saved=%s)", saved)
+logger.warning("retrieve_tax_context: retrieval failed for %r", query, exc_info=True)
+```
+
+Pass values as `%s` args (not f-strings) so formatting is skipped when the level
+is disabled, and add `exc_info=True` inside `except` blocks to capture the
+traceback. The agent nodes and tools already log their key steps this way.
+
+**Watching the log:**
+
+```bash
+tail -f logs/kyron.log
+```
+
+### LangSmith tracing
+
+[LangSmith](https://smith.langchain.com) records every agent run as a tree of
+spans. With tracing on you get, per chat turn:
+
+- **the graph run** — each LangGraph node (`intake`, `qa`, `plan`, `answer`, …)
+  as a span, with the state in/out;
+- **tool spans** — `fetch_prices`, `retrieve_tax_context`, `compute_projection`,
+  because the tools in `agent/tools.py` are decorated with `@traceable`;
+- **LLM spans** — the raw OpenAI calls, because the client is wrapped with
+  `instrument_openai()` (latency, tokens, prompt, completion).
+
+**Enable it** — add a key and flip the switch in `.env`:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=kyron-investbuddy   # optional; this is the default
+```
+
+Then restart the server and run a chat turn. Traces appear under your project at
+https://smith.langchain.com.
+
+**How it's wired** (`agent/observability.py` + `kyron/settings.py`):
+
+- `settings.py` normalises `LANGSMITH_*` (or legacy `LANGCHAIN_*`) env vars into
+  the `LANGCHAIN_*` vars LangGraph/LangSmith read at runtime — **before**
+  `agent.graph` is imported. Tracing turns on only when both
+  `LANGSMITH_TRACING=true` **and** a key are present; otherwise it is forced off
+  so a stale env var can't silently start sending data.
+- `observability.py` exposes `traceable(...)`, `instrument_openai(client)` and
+  `tracing_enabled()`. All three are **no-ops when the switch is off or the
+  `langsmith` package is missing**, so nothing breaks and no network calls are
+  made when tracing is disabled — the default.
+
+**Tracing a new function.** Decorate it; choose a `run_type` so it renders with
+the right icon:
+
+```python
+from agent.observability import traceable
+
+@traceable(run_type="tool", name="my_new_tool")   # "tool" | "retriever" | "chain" | "llm"
+def my_new_tool(arg: str) -> str:
+    ...
+```
+
+Promoting the tool to a graph node (a wrapper in `agent/nodes.py` registered in
+`agent/graph.py`) additionally makes it show up as its own step on the graph
+trace, not just an inline span.
 
 ---
 

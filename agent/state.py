@@ -59,6 +59,7 @@ class AgentState(MessagesState):
 
     # Portfolio
     holdings: list[HoldingState]
+    prices: dict                 # {ticker: live_price} — set by the fetch_prices node
     total_invested: float
     total_current_value: float
     total_unrealised_gain: float
@@ -66,6 +67,10 @@ class AgentState(MessagesState):
 
     # Tax
     tax: TaxState
+
+    # Tool-node scratch space (RAG + projection), consumed by answer_node
+    retrieved_context: str
+    projection_context: str
 
     # Strategy
     approved_strategy: dict
