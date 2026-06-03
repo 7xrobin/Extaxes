@@ -596,20 +596,43 @@ def _last_user_message(messages) -> str:
     )
 
 
-_ADJUST_PHRASES = (
-    "adjust", "change", "revise", "more conservative", "more aggressive",
-    "less risk", "more risk", "different", "instead of",
+# Explicit edit verbs/phrases. Used as a high-recall signal that the user wants
+# the plan CHANGED (not just explained). Kept deliberately broad: silently
+# dropping an adjustment — and then saving the stale, pre-adjustment plan when the
+# user says "looks good" — is the worst failure mode of this flow.
+_EDIT_KEYWORDS = (
+    "adjust", "change", "revise", "rebalance", "rework", "redo", "update",
+    "more conservative", "more aggressive", "less risk", "more risk",
+    "increase", "decrease", "reduce", "lower", "raise", "bump", "shift",
+    "more bonds", "less bonds", "more equity", "less equity", "more stock",
+    "less stock", "swap", "replace", "remove", "drop the", "instead of",
+    "make it", "set the", "different",
 )
-_REVISE_KEYWORDS = (
-    "revise plan", "change plan", "new plan", "redo plan", "update strategy",
-)
+
+
+def _looks_like_edit(text: str) -> bool:
+    """
+    True when a message reads as an explicit request to CHANGE the plan.
+
+    Question-shaped messages (ending in '?') are excluded so hypothetical
+    "what if I had more bonds?" asks still route to Q&A rather than re-planning.
+    Used to confirm/upgrade an adjustment — never to downgrade one.
+    """
+    t = text.lower().strip()
+    if t.endswith("?"):
+        return False
+    return any(k in t for k in _EDIT_KEYWORDS)
 
 
 def _classify_intent(last_user: str) -> str:
     """
-    Classify a pending-approval message as approve / adjust / question via the LLM,
-    with a defensive phrase guard so a stray "adjust" can't re-trigger planning
-    without an explicit change request. Returns one of those three words.
+    Classify a pending-approval message as approve / adjust / question via the LLM.
+
+    The LLM verdict is primary. An explicit edit request (see `_looks_like_edit`)
+    can only UPGRADE the result to "adjust" — we never override a confident
+    "adjust" back into a question. That asymmetry is intentional: re-planning when
+    the user merely asked a question is recoverable (they see a fresh plan and can
+    say so), but dropping a real edit silently saves the wrong strategy.
     """
     intent_resp = client.chat.completions.create(
         model="gpt-4o",
@@ -625,8 +648,11 @@ def _classify_intent(last_user: str) -> str:
     first_word = raw_intent.split()[0] if raw_intent.split() else ""
     intent = re.sub(r"[^a-z]", "", first_word)
 
-    if intent == "adjust" and not any(p in last_user.lower() for p in _ADJUST_PHRASES):
+    if intent not in ("approve", "adjust", "question"):
         intent = "question"
+    # Honour explicit edits even when the LLM under-classifies them as a question.
+    if intent == "question" and _looks_like_edit(last_user):
+        intent = "adjust"
     return intent
 
 
@@ -664,10 +690,22 @@ def qa_node(state: AgentState) -> AgentState:
             }
         return {**state, "current_node": "answer"}
 
-    # Approved state: explicit plan-revision keywords route back to planning.
-    if any(kw in last_user.lower() for kw in _REVISE_KEYWORDS):
-        logger.info("qa_node: approved-state revise request detected")
-        return {**state, "current_node": "adjust"}
+    # Approved state: re-classify with the same LLM-backed logic as the
+    # pending state so a genuine edit re-opens planning (and is re-saved on the
+    # next approval), while plain questions/acknowledgements stay in Q&A.
+    # Keyword matching alone was too brittle here — natural phrasings like
+    # "I'd prefer mostly bonds now" slipped through to Q&A and the previously
+    # saved strategy was never updated.
+    intent = _classify_intent(last_user)
+    logger.info("qa_node: approved-state intent=%s", intent)
+    if intent == "adjust":
+        return {
+            **state,
+            "current_node": "adjust",
+            "messages": messages + [{"role": "assistant", "content":
+                "Got it — let me revise the plan with your feedback..."
+            }],
+        }
 
     return {**state, "current_node": "answer"}
 

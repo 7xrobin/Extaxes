@@ -340,6 +340,111 @@ class RouteAfterQaTest(unittest.TestCase):
         self.assertEqual(route_after_qa({}), "answer")
 
 
+# ── Intent / edit detection ───────────────────────────────────────────────────
+
+from agent.nodes import _looks_like_edit, _classify_intent
+
+
+class LooksLikeEditTest(unittest.TestCase):
+    def test_explicit_numeric_edit_detected(self):
+        self.assertTrue(_looks_like_edit("increase the bond portion to 70%"))
+
+    def test_risk_shift_detected(self):
+        self.assertTrue(_looks_like_edit("make it more conservative"))
+
+    def test_swap_request_detected(self):
+        self.assertTrue(_looks_like_edit("swap bonds for more world equity"))
+
+    def test_reduce_request_detected(self):
+        self.assertTrue(_looks_like_edit("reduce equity to 40 percent"))
+
+    def test_approval_is_not_an_edit(self):
+        self.assertFalse(_looks_like_edit("looks good"))
+
+    def test_hypothetical_question_is_not_an_edit(self):
+        # Question-shaped "what if" must stay in Q&A, not trigger re-planning.
+        self.assertFalse(_looks_like_edit("what if I had more bonds instead?"))
+
+    def test_explanation_question_is_not_an_edit(self):
+        self.assertFalse(_looks_like_edit("why did you choose 60% equity?"))
+
+    def test_tax_question_is_not_an_edit(self):
+        self.assertFalse(_looks_like_edit("what is a Vorabpauschale?"))
+
+
+class ClassifyIntentTest(unittest.TestCase):
+    """The LLM verdict is primary; explicit edits can only UPGRADE to adjust."""
+
+    def _mock_llm(self, word):
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message.content = word
+        return resp
+
+    @patch("agent.nodes.client")
+    def test_llm_adjust_is_trusted_without_keyword(self, mock_client):
+        # Regression: the old phrase guard downgraded this to "question",
+        # silently dropping the edit so the stale plan got saved on approval.
+        mock_client.chat.completions.create.return_value = self._mock_llm("adjust")
+        self.assertEqual(_classify_intent("increase the bond portion to 70%"), "adjust")
+
+    @patch("agent.nodes.client")
+    def test_llm_question_upgraded_when_edit_keyword_present(self, mock_client):
+        mock_client.chat.completions.create.return_value = self._mock_llm("question")
+        self.assertEqual(_classify_intent("reduce equity to 40 percent"), "adjust")
+
+    @patch("agent.nodes.client")
+    def test_llm_question_kept_for_real_question(self, mock_client):
+        mock_client.chat.completions.create.return_value = self._mock_llm("question")
+        self.assertEqual(_classify_intent("what is a Vorabpauschale?"), "question")
+
+    @patch("agent.nodes.client")
+    def test_approve_is_never_overridden(self, mock_client):
+        mock_client.chat.completions.create.return_value = self._mock_llm("approve")
+        self.assertEqual(_classify_intent("looks good, save it"), "approve")
+
+    @patch("agent.nodes.client")
+    def test_unknown_llm_output_defaults_to_question(self, mock_client):
+        mock_client.chat.completions.create.return_value = self._mock_llm("maybe")
+        self.assertEqual(_classify_intent("hmm not sure"), "question")
+
+
+class QaNodeApprovedStateTest(unittest.TestCase):
+    """
+    After a strategy is saved, an edit request must re-open planning so the new
+    plan is re-saved on the next approval. Regression: this path used keyword
+    matching only, so natural phrasings without a keyword fell through to Q&A and
+    the previously saved strategy was never updated.
+    """
+
+    def _state(self, last_user):
+        return {
+            "strategy_saved": True,
+            "messages": [
+                {"role": "assistant", "content": "Strategy saved."},
+                {"role": "user", "content": last_user},
+            ],
+        }
+
+    @patch("agent.nodes._classify_intent", return_value="adjust")
+    def test_keywordless_edit_routes_to_adjust(self, _mock):
+        from agent.nodes import qa_node
+        result = qa_node(self._state("I would prefer mostly bonds from now on"))
+        self.assertEqual(result["current_node"], "adjust")
+
+    @patch("agent.nodes._classify_intent", return_value="question")
+    def test_plain_question_stays_in_answer(self, _mock):
+        from agent.nodes import qa_node
+        result = qa_node(self._state("what is a Vorabpauschale?"))
+        self.assertEqual(result["current_node"], "answer")
+
+    @patch("agent.nodes._classify_intent", return_value="approve")
+    def test_acknowledgement_stays_in_answer(self, _mock):
+        from agent.nodes import qa_node
+        result = qa_node(self._state("great, thanks!"))
+        self.assertEqual(result["current_node"], "answer")
+
+
 # ── Tool Nodes ────────────────────────────────────────────────────────────────
 
 class FetchPricesNodeTest(unittest.TestCase):
