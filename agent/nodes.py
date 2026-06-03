@@ -21,6 +21,7 @@ from .tax_engine import (
 from .price_service import get_prices
 from .observability import instrument_openai
 from .tools import fetch_prices, retrieve_tax_context, compute_projection
+from .validators import validate_plan_alignment
 
 logger = logging.getLogger("agent.nodes")
 
@@ -377,6 +378,11 @@ def _split_plan_and_json(raw: str):
     return prose, None
 
 
+# Number of automatic re-prompts allowed when the proposed allocation doesn't match
+# the user's risk profile. One retry keeps the self-correcting loop bounded and fast.
+MAX_PLAN_ALIGNMENT_RETRIES = 1
+
+
 PLAN_SYSTEM_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
 Your job is to help users understand their investment situation and think through a strategy.
 
@@ -434,17 +440,49 @@ After the prose, append a fenced JSON block (```json ... ```) with the structure
 The allocation_pct values must sum to 100. The total_target_amount is the user's intended invested capital target (e.g. investable_surplus, or annual budget × years for long-horizon goals — pick a sensible number).
 """
 
-    response = client.chat.completions.create(
-        # TODO: Make this callable with a flag for model choice, default to gpt-4o-mini
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": PLAN_SYSTEM_PROMPT},
-            {"role": "user",   "content": context},
-        ],
-        max_tokens=700,
-    )
-    raw = response.choices[0].message.content or ""
-    plan_text, strategy_data = _split_plan_and_json(raw)
+    # Review gate: generate the plan, then verify the equity weight matches the
+    # user's risk profile. If it doesn't, re-prompt with a correction (bounded by
+    # MAX_PLAN_ALIGNMENT_RETRIES) so a "conservative" user can't silently get an
+    # aggressive allocation. This runs inside the node — rather than as a graph
+    # loop back into `plan` — so the confirmation messages appended below are only
+    # ever produced once per turn.
+    risk_profile = state.get("risk_profile", "balanced")
+    correction = ""
+    plan_text, strategy_data, align_warnings = "", None, []
+
+    for attempt in range(MAX_PLAN_ALIGNMENT_RETRIES + 1):
+        response = client.chat.completions.create(
+            # TODO: Make this callable with a flag for model choice, default to gpt-4o-mini
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": PLAN_SYSTEM_PROMPT},
+                {"role": "user",   "content": context + correction},
+            ],
+            max_tokens=700,
+        )
+        raw = response.choices[0].message.content or ""
+        plan_text, strategy_data = _split_plan_and_json(raw)
+
+        align_warnings = validate_plan_alignment(strategy_data, risk_profile)
+        if not align_warnings:
+            break
+        correction = (
+            "\n\nIMPORTANT — your previous proposal did NOT match the user's stated "
+            f"risk profile ('{risk_profile}'). Issues: " + " ".join(align_warnings)
+            + " Re-balance the allocation so the equity weight fits this risk "
+            "profile, then return the corrected prose and the JSON block."
+        )
+        logger.info("plan_node: re-planning for risk alignment (attempt %d)", attempt + 1)
+
+    # If still misaligned after the retry, be transparent rather than silently
+    # presenting a mismatched plan.
+    if align_warnings:
+        plan_text += (
+            "\n\n_Note: this allocation may not fully match your "
+            f"{risk_profile} risk profile ({' '.join(align_warnings)}) — "
+            "let me know and I can rebalance it._"
+        )
+
     messages = list(state.get("messages", []))
 
     return {

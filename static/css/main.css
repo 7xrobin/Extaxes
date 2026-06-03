@@ -213,6 +213,17 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
 .tag-green { font-size: 0.72rem; background: var(--surface); border: 1px solid var(--green);
              color: var(--green); padding: 0.1rem 0.5rem; border-radius: 99px; }
 
+/* UCITS / suitability warning surfaced on a suggestion card */
+.suggestion-warning { font-size: 0.78rem; line-height: 1.45; color: #f7c948;
+             background: rgba(247, 201, 72, 0.08); border: 1px solid rgba(247, 201, 72, 0.35);
+             border-radius: var(--radius); padding: 0.4rem 0.6rem; margin-bottom: 0.45rem; }
+
+/* Bucket (allocation-strategy) tabs inside the AI Suggestions panel */
+.bucket-tabs { margin: 0.25rem 0 1rem; flex-wrap: wrap; }
+.bucket-count { display: inline-block; min-width: 1.1rem; text-align: center;
+             font-size: 0.68rem; background: var(--surface); border: 1px solid var(--border);
+             color: var(--muted); padding: 0 0.35rem; border-radius: 99px; margin-left: 0.3rem; }
+
 /* Small button variant */
 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
 

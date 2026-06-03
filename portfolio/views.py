@@ -15,6 +15,8 @@ from agent.price_service import (
     get_price, get_prices, get_period_start_prices, get_period_returns, PERIOD_MAP,
 )
 from agent.simulation import project_growth, DEFAULT_ANNUAL_RETURN_PCT
+from agent.validators import validate_etf_suggestions
+from django.template.defaultfilters import slugify
 
 
 PERIOD_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "1Y": "1 year", "YTD": "YTD"}
@@ -413,6 +415,10 @@ def suggestions_partial(request):
     profile = _get_or_create_profile(str(request.user.id))
     goals = list(profile.goals.all())
     suggestions = _generate_suggestions(profile, goals)
+    # Review gate: flag any ticker that doesn't look UCITS / EU-domiciled before the
+    # user ever sees it — recommending a US-listed fund to a German resident loses
+    # the Teilfreistellung exemption and adds §18 InvStG reporting.
+    validate_etf_suggestions(suggestions)
     tickers = [s["ticker"] for s in suggestions]
     prices = get_prices(tickers)
     for s in suggestions:
@@ -422,7 +428,28 @@ def suggestions_partial(request):
             {"code": code, "label": PERIOD_LABELS.get(code, code), "gain": returns.get(code, 0.0)}
             for code in DISCOVER_PERIODS
         ]
-    return render(request, "portfolio/suggestions_partial.html", {"suggestions": suggestions})
+    buckets = _bucket_suggestions(suggestions)
+    return render(request, "portfolio/suggestions_partial.html", {
+        "suggestions": suggestions,  # kept flat for the alloc-chart JSON script
+        "buckets": buckets,          # grouped by plan_category for the bucket tabs
+    })
+
+
+def _bucket_suggestions(suggestions):
+    """
+    Group suggestions by their plan_category (allocation bucket), preserving first-seen
+    order, so the UI can present one tab per bucket (e.g. Global Developed Markets /
+    Emerging Markets / Other). Returns a list of {name, slug, items} dicts.
+    """
+    by_cat: dict[str, list] = {}
+    order: list[str] = []
+    for s in suggestions:
+        cat = (s.get("plan_category") or "Other").strip() or "Other"
+        if cat not in by_cat:
+            by_cat[cat] = []
+            order.append(cat)
+        by_cat[cat].append(s)
+    return [{"name": cat, "slug": slugify(cat), "items": by_cat[cat]} for cat in order]
 
 
 @login_required

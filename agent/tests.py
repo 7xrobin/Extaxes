@@ -557,3 +557,62 @@ class AnalysisNodeTest(unittest.TestCase):
         tax_pos = result["tax"]["positions"][0]
         self.assertEqual(tax_pos["vorabpauschale_annual"], 0.0)
         self.assertEqual(result["tax"]["vorabpauschale_total_estimate"], 0.0)
+
+
+# ── Validators: ETF / UCITS suitability gate ─────────────────────────────────
+
+from agent.validators import (
+    validate_etf_suggestions, validate_plan_alignment,
+)
+
+
+class ValidateEtfSuggestionsTest(TestCase):
+    def test_eu_suffix_ticker_has_no_warning(self):
+        out = validate_etf_suggestions([{"ticker": "VWCE.DE", "exchange": "XETRA"}])
+        self.assertNotIn("warning", out[0])
+
+    def test_known_us_etf_flagged_as_non_ucits(self):
+        out = validate_etf_suggestions([{"ticker": "SPY", "exchange": "NYSEARCA"}])
+        self.assertIn("warning", out[0])
+        self.assertIn("UCITS", out[0]["warning"])
+
+    def test_valid_exchange_without_eu_suffix_passes(self):
+        out = validate_etf_suggestions([{"ticker": "VUSA", "exchange": "LSE"}])
+        self.assertNotIn("warning", out[0])
+
+    def test_unknown_listing_gets_verify_warning(self):
+        out = validate_etf_suggestions([{"ticker": "ZZZZ", "exchange": "NASDAQ"}])
+        self.assertIn("warning", out[0])
+        self.assertIn("verify", out[0]["warning"].lower())
+
+    def test_returns_same_list_object(self):
+        suggestions = [{"ticker": "VWCE.DE", "exchange": "XETRA"}]
+        self.assertIs(validate_etf_suggestions(suggestions), suggestions)
+
+
+class ValidatePlanAlignmentTest(TestCase):
+    def _plan(self, *cats):
+        return {"categories": [{"name": n, "allocation_pct": p} for n, p in cats]}
+
+    def test_aligned_balanced_plan_has_no_warnings(self):
+        plan = self._plan(("Core World ETF", 60), ("Euro Bonds", 40))
+        self.assertEqual(validate_plan_alignment(plan, "balanced"), [])
+
+    def test_conservative_with_high_equity_warns(self):
+        plan = self._plan(("World Equity", 80), ("Bonds", 20))
+        warnings = validate_plan_alignment(plan, "conservative")
+        self.assertTrue(warnings)
+        self.assertIn("high", warnings[0])
+
+    def test_growth_with_low_equity_warns(self):
+        plan = self._plan(("World Equity", 40), ("Bonds", 60))
+        warnings = validate_plan_alignment(plan, "growth")
+        self.assertTrue(warnings)
+        self.assertIn("low", warnings[0])
+
+    def test_empty_plan_returns_no_warnings(self):
+        self.assertEqual(validate_plan_alignment(None, "conservative"), [])
+
+    def test_unknown_risk_falls_back_to_balanced_band(self):
+        plan = self._plan(("World Equity", 70), ("Bonds", 30))
+        self.assertEqual(validate_plan_alignment(plan, "mystery"), [])
