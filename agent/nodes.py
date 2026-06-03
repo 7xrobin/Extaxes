@@ -22,6 +22,7 @@ from .price_service import get_prices
 from .observability import instrument_openai
 from .tools import fetch_prices, retrieve_tax_context, compute_projection
 from .validators import validate_plan_alignment
+from . import catalog
 
 logger = logging.getLogger("agent.nodes")
 
@@ -97,7 +98,7 @@ def intake_node(state: AgentState) -> AgentState:
         _, question = INTAKE_QUESTIONS[step]
         if step == 0:
             content = (
-                "Hi! I'm Kyron, your financial clarity assistant for expats in Germany. "
+                "Hi! I'm InvestBuddy, your financial clarity assistant for expats in Germany. "
                 "I'll help you understand your investments, estimate your tax exposure, "
                 "and build a plain-English strategy — no jargon, no product pitches.\n\n"
                 "Let's start with a few quick questions.\n\n"
@@ -383,7 +384,7 @@ def _split_plan_and_json(raw: str):
 MAX_PLAN_ALIGNMENT_RETRIES = 1
 
 
-PLAN_SYSTEM_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
+PLAN_SYSTEM_PROMPT = """You are InvestBuddy, a financial clarity assistant for expats in Germany.
 Your job is to help users understand their investment situation and think through a strategy.
 
 IMPORTANT RULES:
@@ -435,7 +436,10 @@ Propose:
 3. Simple exit rules: when it makes sense to review or take profits
 4. One plain-English tax insight relevant to their situation
 
-After the prose, append a fenced JSON block (```json ... ```) with the structured allocation in this exact shape, using the same categories you proposed:
+Choose category names ONLY from this fixed list (so the strategy, suggestions, and holdings stay consistent):
+{", ".join(catalog.category_names())}
+
+After the prose, append a fenced JSON block (```json ... ```) with the structured allocation in this exact shape, using the same categories you proposed (names must match the list above exactly):
 {{"categories": [{{"name": "Core World ETF", "allocation_pct": 60}}, ...], "total_target_amount": <number in euros>}}
 The allocation_pct values must sum to 100. The total_target_amount is the user's intended invested capital target (e.g. investable_surplus, or annual budget × years for long-horizon goals — pick a sensible number).
 """
@@ -564,7 +568,7 @@ def approval_node(state: AgentState) -> AgentState:
 
 # ── Q&A NODE ──────────────────────────────────────────────────────────────────
 
-_QA_APPROVED_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
+_QA_APPROVED_PROMPT = """You are InvestBuddy, a financial clarity assistant for expats in Germany.
 The user has approved their investment strategy. Answer follow-up questions helpfully and concisely (under 200 words).
 
 Rules:
@@ -573,7 +577,7 @@ Rules:
 - Never say "you should buy/sell X" — say "it might be worth reviewing" or "one option is"
 - This is educational — not personal investment advice."""
 
-_QA_PENDING_PROMPT = """You are Kyron, a financial clarity assistant for expats in Germany.
+_QA_PENDING_PROMPT = """You are InvestBuddy, a financial clarity assistant for expats in Germany.
 You have just proposed an investment strategy to the user. They may ask questions before deciding.
 Answer their question concisely (under 150 words), then ask whether the plan looks good to them.
 
@@ -757,7 +761,7 @@ def answer_node(state: AgentState) -> AgentState:
 
 # ── DIGEST NODE ───────────────────────────────────────────────────────────────
 
-DIGEST_SYSTEM_PROMPT = """You are Kyron generating a weekly investment digest.
+DIGEST_SYSTEM_PROMPT = """You are InvestBuddy generating a weekly investment digest.
 
 Write in plain English — imagine explaining to a smart friend who doesn't know
 finance terms. Structure:

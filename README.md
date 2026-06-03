@@ -1,4 +1,4 @@
-# Kyron
+# InvestBuddy
 
 Investment strategy assistant for expats in Germany. Tracks ETFs  explains German tax rules in plain English, and generates a weekly digest — powered by a LangGraph agent with human-in-the-loop conversation.
 
@@ -68,7 +68,7 @@ invest-tax/
 
 ## Memory architecture
 
-Kyron uses **two completely separate SQLite databases** with different lifetimes and purposes. This is the most important architectural decision in the project.
+InvestBuddy uses **two completely separate SQLite databases** with different lifetimes and purposes. This is the most important architectural decision in the project.
 
 ### 1. Django database (`db.sqlite3`) — long-term memory
 
@@ -261,13 +261,13 @@ Annual tax-free allowance on capital income:
 - Single: **€1,000/year**
 - Married (filing jointly): **€2,000/year**
 
-Applied at the portfolio level. Kyron tracks remaining allowance in `TaxState.sparerpauschbetrag_remaining` and uses it to shade the tax estimates shown in the portfolio view.
+Applied at the portfolio level. InvestBuddy tracks remaining allowance in `TaxState.sparerpauschbetrag_remaining` and uses it to shade the tax estimates shown in the portfolio view.
 
 ### Exit tax (§19(3) InvStG + Jahressteuergesetz 2024)
 
 If you leave Germany with a portfolio whose total acquisition cost exceeds **€500,000**, the departure is treated as a deemed disposal — you owe capital gains tax as if you sold everything on the day you left, even though you haven't.
 
-Kyron flags this as a warning when `total_invested > €500,000`. This rule applies from 1 January 2025.
+InvestBuddy flags this as a warning when `total_invested > €500,000`. This rule applies from 1 January 2025.
 
 ---
 

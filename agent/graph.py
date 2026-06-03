@@ -1,5 +1,5 @@
 """
-LangGraph StateGraph — Kyron investment agent.
+LangGraph StateGraph — InvestBuddy investment agent.
 
 Agent tools are first-class nodes here: `fetch_prices` (live prices), `retrieve`
 (tax-source RAG) and `simulate` (growth projection) each run as their own graph

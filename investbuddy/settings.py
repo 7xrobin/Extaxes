@@ -37,7 +37,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "kyron.urls"
+ROOT_URLCONF = "investbuddy.urls"
 
 TEMPLATES = [
     {
@@ -56,7 +56,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "kyron.wsgi.application"
+WSGI_APPLICATION = "investbuddy.wsgi.application"
 
 DATABASES = {
     "default": {
@@ -105,7 +105,7 @@ RAG_EMBEDDING_MODEL = "text-embedding-3-small"
 # the LANGCHAIN_* env vars that LangGraph / LangSmith actually read at runtime.
 # This must happen before agent.graph is imported (Django loads settings first).
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")
-LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "kyron-investbuddy")
+LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "investbuddy")
 LANGSMITH_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
 _LANGSMITH_TRACING = (
     os.getenv("LANGSMITH_TRACING") or os.getenv("LANGCHAIN_TRACING_V2") or "false"
@@ -156,7 +156,7 @@ LOGGING = {
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": str(LOGS_DIR / "kyron.log"),
+            "filename": str(LOGS_DIR / "investbuddy.log"),
             "maxBytes": 5 * 1024 * 1024,   # 5 MB
             "backupCount": 5,
             "formatter": "verbose",

@@ -1,5 +1,5 @@
 """
-Suitability review gates for Kyron.
+Suitability review gates for InvestBuddy.
 
 Two validators sit between raw LLM output and the user, enforcing the promises the
 product makes about German tax efficiency and personalisation:
@@ -21,6 +21,7 @@ ETF gate mutates the dicts it is handed (adding ``warning``) and returns them.
 """
 import logging
 
+from . import catalog
 from .observability import traceable
 
 logger = logging.getLogger("agent.validators")
@@ -104,20 +105,33 @@ _RISK_EQUITY_BANDS = {
     "growth":       (60, 100),
 }
 
-# Substrings in a category name that mark it as equity exposure.
+# Fallback substrings that mark a category name as equity exposure, used only when
+# the name isn't a known catalog category (e.g. an LLM-invented bucket).
 _EQUITY_HINTS = (
     "equity", "world", "stock", "share", "s&p", "sp500", "msci", "nasdaq",
     "emerging", "developed", "all-world", "all world", "dividend", "growth",
 )
 
 
+def _looks_equity(name: str) -> bool:
+    """
+    Whether a category is equity exposure. Prefers the shared catalog's `equity`
+    flag (so it stays in lock-step with agent/catalog.py); falls back to the
+    substring heuristic for off-catalog names.
+    """
+    known = catalog.is_equity_category(name)
+    if known is not None:
+        return known
+    return any(h in (name or "").lower() for h in _EQUITY_HINTS)
+
+
 def _equity_allocation_pct(plan_data: dict) -> float:
-    """Sum of allocation_pct across categories whose name looks like equity exposure."""
+    """Sum of allocation_pct across categories whose name is equity exposure."""
     cats = (plan_data or {}).get("categories") or []
     return sum(
         c.get("allocation_pct", 0) or 0
         for c in cats
-        if any(h in (c.get("name", "") or "").lower() for h in _EQUITY_HINTS)
+        if _looks_equity(c.get("name", "") or "")
     )
 
 

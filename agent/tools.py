@@ -14,6 +14,7 @@ state along.
 import re
 import logging
 
+from . import catalog
 from .observability import traceable
 from .price_service import get_prices
 from .simulation import (
@@ -37,6 +38,27 @@ def fetch_prices(tickers: list[str]) -> dict[str, float]:
         logger.warning("fetch_prices: no price for %s", ", ".join(missing))
     logger.info("fetch_prices: resolved %d/%d tickers", len(tickers) - len(missing), len(tickers))
     return prices
+
+
+# ── TYPE CATALOG TOOL ─────────────────────────────────────────────────────────
+
+@traceable(run_type="tool", name="get_available_types")
+def get_available_types() -> dict:
+    """
+    Return the available instrument types and allocation categories the rest of the
+    app supports ("API availability"). The strategy, Discover suggestions, and
+    Holdings are all constrained to this shared vocabulary so a category means the
+    same thing everywhere. Sourced from the canonical catalog in agent/catalog.py.
+    """
+    result = {
+        "asset_types": catalog.ASSET_TYPES,
+        "categories": catalog.CATEGORIES,
+    }
+    logger.info(
+        "get_available_types: %d asset types, %d categories",
+        len(result["asset_types"]), len(result["categories"]),
+    )
+    return result
 
 
 # ── TAX RAG TOOL ──────────────────────────────────────────────────────────────

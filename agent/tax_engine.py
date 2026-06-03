@@ -48,6 +48,32 @@ def effective_rate(asset_type: str) -> float:
     return STANDARD_RATE * (1 - exemption)
 
 
+def teilfreistellung_pct(asset_type: str) -> float:
+    """
+    §20 InvStG partial-exemption fraction for an asset type (e.g. 0.30 for equity
+    ETFs, 0.0 for individual stocks). Used to surface the implication per holding.
+    """
+    return TEILFREISTELLUNG.get(asset_type, 0.0)
+
+
+def teilfreistellung_note(asset_type: str) -> str:
+    """
+    One-line plain-English implication of the Teilfreistellung for an asset type,
+    suitable for a tooltip on a holding or suggestion card.
+    """
+    exempt = TEILFREISTELLUNG.get(asset_type, 0.0)
+    rate = effective_rate(asset_type) * 100
+    if exempt > 0:
+        return (
+            f"{exempt*100:.0f}% of gains are tax-exempt (Teilfreistellung, §20 InvStG) — "
+            f"effective capital-gains rate ≈ {rate:.1f}% instead of {STANDARD_RATE*100:.1f}%."
+        )
+    return (
+        f"No Teilfreistellung — gains taxed at the full Abgeltungsteuer rate "
+        f"≈ {rate:.1f}%."
+    )
+
+
 def tax_on_exit(gain: float, asset_type: str) -> float:
     """
     Estimated tax owed if position is fully sold today.

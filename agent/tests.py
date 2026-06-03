@@ -616,3 +616,58 @@ class ValidatePlanAlignmentTest(TestCase):
     def test_unknown_risk_falls_back_to_balanced_band(self):
         plan = self._plan(("World Equity", 70), ("Bonds", 30))
         self.assertEqual(validate_plan_alignment(plan, "mystery"), [])
+
+
+# ── Shared type catalog + Teilfreistellung helpers ────────────────────────────
+
+class TypeCatalogTest(unittest.TestCase):
+    def test_get_available_types_returns_asset_types_and_categories(self):
+        from agent.tools import get_available_types
+        result = get_available_types()
+        self.assertIn("asset_types", result)
+        self.assertIn("categories", result)
+        self.assertTrue(result["asset_types"])
+        self.assertTrue(result["categories"])
+
+    def test_asset_type_values_match_holding_choices(self):
+        from agent import catalog
+        # The shared catalog must stay in lock-step with the model's DB values.
+        self.assertEqual(
+            {t["value"] for t in catalog.ASSET_TYPES},
+            set(TEILFREISTELLUNG.keys()),
+        )
+
+    def test_is_equity_category_known_and_unknown(self):
+        from agent import catalog
+        self.assertTrue(catalog.is_equity_category("Core World ETF"))
+        self.assertFalse(catalog.is_equity_category("Bonds / Stability"))
+        self.assertIsNone(catalog.is_equity_category("Some Made-Up Bucket"))
+
+    def test_plan_alignment_uses_catalog_category_equity_flag(self):
+        # "Bonds / Stability" is non-equity in the catalog, so a conservative
+        # plan dominated by it must NOT trip the high-equity warning.
+        plan = {"categories": [
+            {"name": "Core World ETF", "allocation_pct": 40},
+            {"name": "Bonds / Stability", "allocation_pct": 60},
+        ]}
+        self.assertEqual(validate_plan_alignment(plan, "conservative"), [])
+
+
+class TeilfreistellungHelpersTest(unittest.TestCase):
+    def test_pct_equity_etf_is_30(self):
+        from agent.tax_engine import teilfreistellung_pct
+        self.assertAlmostEqual(teilfreistellung_pct("etf_acc"), 0.30)
+        self.assertAlmostEqual(teilfreistellung_pct("etf_dist"), 0.30)
+
+    def test_pct_stock_and_unknown_are_zero(self):
+        from agent.tax_engine import teilfreistellung_pct
+        self.assertEqual(teilfreistellung_pct("stock"), 0.0)
+        self.assertEqual(teilfreistellung_pct("mystery"), 0.0)
+
+    def test_note_mentions_exemption_for_etf(self):
+        from agent.tax_engine import teilfreistellung_note
+        self.assertIn("exempt", teilfreistellung_note("etf_acc").lower())
+
+    def test_note_for_stock_says_no_exemption(self):
+        from agent.tax_engine import teilfreistellung_note
+        self.assertIn("no teilfreistellung", teilfreistellung_note("stock").lower())

@@ -10,12 +10,16 @@ from datetime import date
 import yfinance as yf
 from openai import OpenAI
 from .models import UserProfile, Holding, ExitRule
-from agent.tax_engine import tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit
+from agent.tax_engine import (
+    tax_on_exit, vorabpauschale, effective_rate, sparerpauschbetrag_limit,
+    teilfreistellung_pct, teilfreistellung_note,
+)
 from agent.price_service import (
     get_price, get_prices, get_period_start_prices, get_period_returns, PERIOD_MAP,
 )
 from agent.simulation import project_growth, DEFAULT_ANNUAL_RETURN_PCT
 from agent.validators import validate_etf_suggestions
+from agent import catalog
 from django.template.defaultfilters import slugify
 
 
@@ -214,6 +218,9 @@ def overview(request):
         "sim_monthly":         round(profile.monthly_investment_budget),
         "sim_years":           10,
         "sim_return_pct":      _weighted_annual_return(holdings),
+        # Discover attribute filters — sourced from the shared type catalog.
+        "discover_categories":  catalog.category_names(),
+        "discover_asset_types": catalog.ASSET_TYPES,
     })
 
 
@@ -341,6 +348,8 @@ def tax_partial(request):
             "vorabpauschale": vp,
             "tax_if_sold":    tax,
             "rate":           effective_rate(h.asset_type) * 100,
+            "teilfreistellung_pct": round(teilfreistellung_pct(h.asset_type) * 100),
+            "tax_note":       teilfreistellung_note(h.asset_type),
         })
 
     return render(request, "portfolio/tax_summary.html", {
@@ -352,7 +361,7 @@ def tax_partial(request):
 
 # ── DISCOVER ──────────────────────────────────────────────────────────────────
 
-DISCOVER_SYSTEM_PROMPT = """You are Kyron, a financial assistant for expats in Germany.
+DISCOVER_SYSTEM_PROMPT = """You are InvestBuddy, a financial assistant for expats in Germany.
 Suggest 6 specific ETFs or stocks available on European exchanges (XETRA .DE or Euronext .AS preferred).
 Include both European-domiciled ETFs AND UCITS-compliant versions of American ETFs (e.g. iShares S&P 500 UCITS SXR8.DE, Xtrackers Nasdaq 100 XNAS.DE, Amundi MSCI USA) — NOT the US-listed versions (SPY, QQQ, VTI are not valid here).
 Focus on instruments accessible via German brokers (Trade Republic, Scalable Capital, ING).
@@ -365,11 +374,12 @@ For each suggestion return a JSON object with EXACTLY these fields:
   "exchange": "XETRA",
   "plan_category": "Core World ETF",
   "allocation_pct": 60,
-  "exit_timeframe": "Long-term 5+ years",
   "rationale": "One sentence why this fits the user."
 }
 
 asset_type must be one of: etf_acc, etf_dist, stock
+plan_category MUST be chosen from this fixed list (so suggestions line up with the user's strategy and holdings):
+{CATEGORY_LIST}
 
 Rules:
 - Prefer accumulating ETFs (etf_acc) for German tax efficiency (Teilfreistellung)
@@ -381,10 +391,38 @@ Rules:
 """
 
 
-def _generate_suggestions(profile, goals):
+def _filter_instructions(filters):
+    """Turn the Discover filter form values into plain LLM steering lines."""
+    if not filters:
+        return ""
+    lines = []
+    cat = (filters.get("category") or "").strip()
+    if cat and cat in catalog.category_names():
+        lines.append(f"- Only suggest instruments in the '{cat}' category.")
+    atype = (filters.get("asset_type") or "").strip()
+    labels = catalog.asset_type_labels()
+    if atype in labels:
+        lines.append(f"- Only suggest instruments of type {labels[atype]} ({atype}).")
+    if (filters.get("tax_efficient") or "").strip() in ("1", "true", "on", "yes"):
+        lines.append(
+            "- Only suggest tax-efficient funds that qualify for the 30% equity "
+            "Teilfreistellung (accumulating or distributing equity ETFs)."
+        )
+    theme = (filters.get("theme") or "").strip()
+    if theme:
+        lines.append(f"- Focus on this theme/preference: {theme}.")
+    if not lines:
+        return ""
+    return "\n\nUser filters (honour these strictly):\n" + "\n".join(lines)
+
+
+def _generate_suggestions(profile, goals, filters=None):
     from django.conf import settings
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
     goals_text = ", ".join(g.name for g in goals) if goals else "general wealth growth"
+    system_prompt = DISCOVER_SYSTEM_PROMPT.replace(
+        "{CATEGORY_LIST}", ", ".join(catalog.category_names())
+    )
     user_context = f"""
 User profile:
 - Risk profile: {profile.risk_profile}
@@ -392,6 +430,7 @@ User profile:
 - Tax bracket: {profile.tax_bracket * 100:.0f}%
 - Married (double Sparerpauschbetrag): {profile.is_married}
 - Goals: {goals_text}
+{_filter_instructions(filters)}
 
 Return a JSON object with key "suggestions" containing an array of exactly 6 suggestion objects.
 """
@@ -399,7 +438,7 @@ Return a JSON object with key "suggestions" containing an array of exactly 6 sug
         model="gpt-4o",
         response_format={"type": "json_object"},
         messages=[
-            {"role": "system", "content": DISCOVER_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_context},
         ],
         max_tokens=1200,
@@ -414,7 +453,13 @@ def suggestions_partial(request):
     """HTMX partial — AI-generated ETF/stock suggestions."""
     profile = _get_or_create_profile(str(request.user.id))
     goals = list(profile.goals.all())
-    suggestions = _generate_suggestions(profile, goals)
+    filters = {
+        "category":      request.POST.get("category", ""),
+        "asset_type":    request.POST.get("asset_type", ""),
+        "tax_efficient": request.POST.get("tax_efficient", ""),
+        "theme":         request.POST.get("theme", ""),
+    }
+    suggestions = _generate_suggestions(profile, goals, filters)
     # Review gate: flag any ticker that doesn't look UCITS / EU-domiciled before the
     # user ever sees it — recommending a US-listed fund to a German resident loses
     # the Teilfreistellung exemption and adds §18 InvStG reporting.
@@ -423,6 +468,8 @@ def suggestions_partial(request):
     prices = get_prices(tickers)
     for s in suggestions:
         s["current_price"] = prices.get(s["ticker"], 0.0)
+        s["teilfreistellung_pct"] = round(teilfreistellung_pct(s.get("asset_type", "")) * 100)
+        s["tax_note"] = teilfreistellung_note(s.get("asset_type", ""))
         returns = get_period_returns(s["ticker"])
         s["period_perf"] = [
             {"code": code, "label": PERIOD_LABELS.get(code, code), "gain": returns.get(code, 0.0)}
@@ -504,7 +551,7 @@ def quick_add(request):
     return HttpResponse(response + oob)
 
 
-_AI_REVIEW_SYSTEM = """You are Kyron, a financial assistant for expats in Germany.
+_AI_REVIEW_SYSTEM = """You are InvestBuddy, a financial assistant for expats in Germany.
 Provide a concise, educational review of the user's investment portfolio.
 Focus on: diversification, German tax efficiency (Teilfreistellung, Vorabpauschale), risk alignment, and 1-2 actionable improvements.
 Keep the total response under 200 words. Use plain text, no markdown headers. Not personal investment advice."""
@@ -585,13 +632,16 @@ def search_partial(request):
             if not info.get("longName") and not info.get("shortName"):
                 error = f"No data found for '{ticker}'. Try an exact symbol like VWCE.DE or IWDA.AS."
             else:
+                asset_type = "etf_acc" if info.get("quoteType", "") == "ETF" else "stock"
                 result = {
                     "ticker":        ticker,
                     "name":          info.get("longName") or info.get("shortName", ticker),
                     "exchange":      info.get("exchange", ""),
                     "currency":      info.get("currency", "EUR"),
-                    "asset_type":    "etf_acc" if info.get("quoteType", "") == "ETF" else "stock",
+                    "asset_type":    asset_type,
                     "current_price": get_price(ticker),
+                    "teilfreistellung_pct": round(teilfreistellung_pct(asset_type) * 100),
+                    "tax_note":      teilfreistellung_note(asset_type),
                 }
         except Exception:
             error = f"Could not look up '{ticker}'. Check the symbol and try again."

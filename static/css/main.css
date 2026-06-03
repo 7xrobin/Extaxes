@@ -212,6 +212,11 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
              color: var(--muted); padding: 0.1rem 0.5rem; border-radius: 99px; }
 .tag-green { font-size: 0.72rem; background: var(--surface); border: 1px solid var(--green);
              color: var(--green); padding: 0.1rem 0.5rem; border-radius: 99px; }
+/* Teilfreistellung (§20 InvStG partial-exemption) badge — hover for the implication */
+.tag-tax   { font-size: 0.68rem; background: rgba(79, 142, 247, 0.08);
+             border: 1px solid rgba(79, 142, 247, 0.35); color: var(--accent);
+             padding: 0.1rem 0.45rem; border-radius: 99px; white-space: nowrap;
+             cursor: help; }
 
 /* UCITS / suitability warning surfaced on a suggestion card */
 .suggestion-warning { font-size: 0.78rem; line-height: 1.45; color: #f7c948;
@@ -408,6 +413,13 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
                      padding: 0.2rem 0.45rem; border-radius: var(--radius); font-size: 0.78rem;
                      cursor: pointer; }
 .suggestion-period-gain { font-size: 0.85rem; font-weight: 600; }
+
+/* ── Discover attribute filters ────────────────────────────────────────────── */
+.discover-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 0.75rem; align-items: end; }
+.discover-filter-check { flex-direction: row; align-items: center; gap: 0.45rem;
+                         color: var(--text); font-size: 0.82rem; }
+.discover-filter-check input { width: auto; }
 
 /* ── Growth Simulation card ────────────────────────────────────────────────── */
 .sim-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

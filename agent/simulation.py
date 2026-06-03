@@ -119,7 +119,7 @@ def recommend_investment(investable_surplus: float, monthly_budget: float) -> di
     """
     Plain 'how much to invest' summary derived from the user's own numbers.
     Suggests deploying the investable surplus (savings above the emergency fund)
-    plus the recurring monthly budget — the levers Kyron already tracks.
+    plus the recurring monthly budget — the levers InvestBuddy already tracks.
     """
     investable_surplus = max(0.0, float(investable_surplus))
     monthly_budget = max(0.0, float(monthly_budget))

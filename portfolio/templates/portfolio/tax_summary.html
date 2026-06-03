@@ -21,6 +21,10 @@
         <span>{{ row.rate|floatformat:2 }}%</span>
       </div>
       <div class="accordion-row">
+        <span title="{{ row.tax_note }}">Teilfreistellung (partial exemption)</span>
+        <span>{{ row.teilfreistellung_pct }}%</span>
+      </div>
+      <div class="accordion-row">
         <span>Annual Vorabpauschale</span>
         <span>
           {% if row.holding.asset_type == "etf_acc" %}

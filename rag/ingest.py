@@ -73,7 +73,7 @@ def _fetch_text(url: str) -> tuple[str, str]:
     resp = requests.get(
         url,
         timeout=20,
-        headers={"User-Agent": "KyronTaxBot/1.0 (+educational German tax assistant)"},
+        headers={"User-Agent": "InvestBuddyTaxBot/1.0 (+educational German tax assistant)"},
     )
     resp.raise_for_status()
     parser = _HTMLTextExtractor()

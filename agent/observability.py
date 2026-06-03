@@ -10,7 +10,7 @@ whether tracing is installed or enabled:
   spans in LangSmith; returns the client unchanged when tracing is off.
 - `tracing_enabled()` — single source of truth for "are we tracing right now".
 
-Tracing is driven entirely by environment variables (set in kyron/settings.py):
+Tracing is driven entirely by environment variables (set in investbuddy/settings.py):
 LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT. LangGraph node runs are
 traced automatically by LangSmith when those are set; this module adds the tool
 spans and the raw-OpenAI spans on top.

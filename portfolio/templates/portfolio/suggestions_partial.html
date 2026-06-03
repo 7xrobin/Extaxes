@@ -43,7 +43,11 @@
           <div class="suggestion-name">{{ s.name }}</div>
           <div class="suggestion-meta">
             <span class="tag">{{ s.plan_category }}</span>
-            <span class="tag-muted">{{ s.exit_timeframe }}</span>
+            {% if s.asset_type == "etf_acc" or s.asset_type == "etf_dist" %}
+            <span class="tag-tax" title="{{ s.tax_note }}">
+              Teilfreistellung {{ s.teilfreistellung_pct }}%
+            </span>
+            {% endif %}
             {% if s.asset_type == "etf_acc" %}
             <span class="tag-green">★ Tax efficient¹</span>
             {% endif %}

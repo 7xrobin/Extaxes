@@ -1,5 +1,7 @@
 from django.db import models
 
+from agent import catalog
+
 
 class UserProfile(models.Model):
     user_id = models.CharField(max_length=100, unique=True, default="demo")
@@ -39,12 +41,9 @@ class Goal(models.Model):
 
 
 class Holding(models.Model):
-    ASSET_TYPES = [
-        ("etf_acc",  "Accumulating ETF"),
-        ("etf_dist", "Distributing ETF"),
-        ("stock",    "Individual Stock"),
-        ("savings",  "Savings / Cash"),
-    ]
+    # Single source of truth: agent/catalog.py. Choices only — values are
+    # unchanged, so this never triggers a migration.
+    ASSET_TYPES = catalog.asset_type_choices()
     profile = models.ForeignKey(
         UserProfile, related_name="holdings", on_delete=models.CASCADE
     )
