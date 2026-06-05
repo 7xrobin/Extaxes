@@ -15,4 +15,5 @@ urlpatterns = [
     path("clear/portfolio/",      views.clear_portfolio,     name="portfolio-clear-portfolio"),
     path("clear/strategy/",       views.clear_strategy,      name="portfolio-clear-strategy"),
     path("ai-review/",            views.ai_review_partial,   name="portfolio-ai-review"),
+    path("holdings/<int:pk>/update/", views.update_holding,  name="portfolio-holding-update"),
 ]

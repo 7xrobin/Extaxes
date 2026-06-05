@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
@@ -664,3 +664,28 @@ def search_partial(request):
         "error":  error,
         "query":  ticker,
     })
+
+
+@login_required
+@require_POST
+def update_holding(request, pk):
+    profile = _get_or_create_profile(str(request.user.id))
+    holding = get_object_or_404(Holding, pk=pk, profile=profile)
+    try:
+        if 'units' in request.POST:
+            val = float(request.POST['units'])
+            if val > 0:
+                holding.units = val
+        if 'avg_purchase_price' in request.POST:
+            val = float(request.POST['avg_purchase_price'])
+            if val > 0:
+                holding.avg_purchase_price = val
+        holding.current_value = holding.units * holding.current_price
+        cost = holding.units * holding.avg_purchase_price
+        holding.unrealised_gain = holding.current_value - cost
+        holding.unrealised_gain_pct = (holding.unrealised_gain / cost * 100) if cost > 0 else 0
+        holding.save()
+    except (ValueError, TypeError):
+        pass
+    holdings = list(profile.holdings.all())
+    return render(request, 'portfolio/holdings.html', {'holdings': holdings})

@@ -20,7 +20,7 @@
     </div>
   </div>
 
-  <!-- ── Holdings card (full width) — Holdings | Discover tabs ────────────── -->
+  <!-- ── Holdings card (full width) ───────────────────────────────────────── -->
   <div class="card">
     <div class="holdings-top-header">
       <h3>Holdings</h3>
@@ -28,28 +28,28 @@
         {% include "portfolio/totals.html" with totals=totals %}
       </div>
     </div>
-    <div class="tabs" id="holdings-tabs">
-      <button class="tab active" onclick="switchHoldingsTab(this,'holdings')">Holdings</button>
-      <button class="tab"        onclick="switchHoldingsTab(this,'discover')">Discover</button>
-    </div>
 
-    <div class="tab-panel active" id="htab-holdings">
-      <div id="holdings-table-container"
-           class="holdings-top-table"
-           hx-get="/portfolio/holdings/"
-           hx-trigger="load"
-           hx-target="this"
-           hx-swap="innerHTML">
-        <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
+    <!-- Discover Assets (always visible) -->
+    <div class="discover-section">
+      <h4 class="discover-section-title">Discover Assets</h4>
+
+      <!-- Top row: ticker note + AI button side by side -->
+      <div class="discover-top-row">
+        <p class="note discover-top-note">
+          Look up an exact ticker — e.g. <strong>VWCE.DE</strong>, <strong>IWDA.AS</strong>, <strong>SXR8.DE</strong>, <strong>ALV.DE</strong>
+        </p>
+        <button class="btn suggestions-btn"
+                hx-post="/portfolio/discover/suggestions/"
+                hx-include="#discover-filters"
+                hx-target="#suggestions-output"
+                hx-swap="innerHTML"
+                hx-disabled-elt="this"
+                hx-on:htmx:before-request="this.querySelector('.btn-label').textContent='Generating…'; document.getElementById('suggestions-output').innerHTML='<div class=\'suggestions-loading\'><span class=\'spinner\'></span><span>Asking AI for personalised suggestions…</span></div>'"
+                hx-on:htmx:after-request="this.querySelector('.btn-label').textContent='✦ Generate AI Suggestions'">
+          <span class="btn-label">✦ Generate AI Suggestions</span>
+        </button>
       </div>
-    </div>
 
-    <!-- Discover: ticker search + attribute filters + AI suggestions, unified -->
-    <div class="tab-panel" id="htab-discover">
-      <!-- Ticker search -->
-      <p class="note" style="margin-bottom:0.6rem;">
-        Look up an exact ticker — e.g. <strong>VWCE.DE</strong>, <strong>IWDA.AS</strong>, <strong>SXR8.DE</strong>, <strong>ALV.DE</strong> — or generate AI suggestions below.
-      </p>
       <div style="display:flex;gap:0.5rem;margin-bottom:1.25rem;">
         <input id="ticker-input" type="text" name="ticker" placeholder="e.g. VWCE.DE"
                style="flex:1;background:var(--bg);border:1px solid var(--border);
@@ -64,7 +64,6 @@
       </div>
       <div id="search-output" style="margin-bottom:1.25rem;"></div>
 
-      <!-- Attribute filters (steer the AI suggestions) -->
       <div id="discover-filters" class="discover-filters">
         <label class="sim-field">Category
           <select class="sim-input" name="category">
@@ -91,70 +90,72 @@
         </label>
       </div>
 
-      <button class="btn btn-sm suggestions-btn" style="margin:1rem 0 0.5rem;"
-              hx-post="/portfolio/discover/suggestions/"
-              hx-include="#discover-filters"
-              hx-target="#suggestions-output"
-              hx-swap="innerHTML"
-              hx-disabled-elt="this"
-              hx-on:htmx:before-request="this.querySelector('.btn-label').textContent='Generating…'; document.getElementById('suggestions-output').innerHTML='<div class=\'suggestions-loading\'><span class=\'spinner\'></span><span>Asking AI for personalised suggestions…</span></div>'"
-              hx-on:htmx:after-request="this.querySelector('.btn-label').textContent='Generate AI Suggestions'">
-        <span class="btn-label">Generate AI Suggestions</span>
-      </button>
-
-      <div id="suggestions-output">
+      <div id="suggestions-output" style="margin-top:1rem;">
         <p style="color:var(--muted);font-size:0.9rem;">
-          Set any filters above and click <strong>Generate AI Suggestions</strong> for ideas tailored to your profile and strategy.
+          Set filters below and click <strong>✦ Generate AI Suggestions</strong> for ideas tailored to your profile and strategy.
         </p>
       </div>
     </div>
-  </div>
 
-  <!-- ── Growth Simulation (below holdings, button-triggered) ─────────────── -->
-  <div class="card">
-    <div class="discover-full-header">
-      <h3>Growth Simulation</h3>
+    <!-- Holdings table -->
+    <div id="holdings-table-container"
+         class="holdings-top-table"
+         hx-get="/portfolio/holdings/"
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML">
+      <span class="htmx-indicator"><span class="spinner"></span> Loading…</span>
     </div>
-    <p class="note" style="margin-bottom:1rem;">
-      Projects how your portfolio could grow with regular monthly contributions. The default
-      return is the value-weighted trailing 12-month gain of the ETFs/stocks you actually hold
-      ({{ sim_return_pct|floatformat:1 }}%/yr) — tweak any input, then run it. Shows value before
-      and after German capital-gains tax.
-    </p>
-    <form class="sim-form"
-          hx-post="/portfolio/simulate/"
-          hx-target="#sim-output"
-          hx-swap="innerHTML"
-          hx-trigger="submit">
-      {% csrf_token %}
-      <div class="sim-inputs">
-        <label class="sim-field">Start amount (€)
-          <input class="sim-input" type="number" name="start_amount" value="{{ sim_start_amount }}" min="0" step="any">
-        </label>
-        <label class="sim-field">Monthly (€)
-          <input class="sim-input" type="number" name="monthly_contribution" value="{{ sim_monthly }}" min="0" step="any">
-        </label>
-        <label class="sim-field">Years
-          <input class="sim-input" type="number" name="years" value="{{ sim_years }}" min="1" max="50" step="1">
-        </label>
-        <label class="sim-field">Return %/yr
-          <input class="sim-input" type="number" name="annual_return_pct" value="{{ sim_return_pct }}" min="0" max="50" step="any">
-        </label>
-        <label class="sim-field">Asset type
-          <select class="sim-input" name="asset_type">
-            {% for t in discover_asset_types %}
-            <option value="{{ t.value }}">{{ t.label }}</option>
-            {% endfor %}
-          </select>
-        </label>
+
+    <!-- Growth Simulation accordion -->
+    <details class="sim-accordion">
+      <summary class="sim-summary">
+        Growth Simulation
+        <span class="sim-summary-hint">Project how your portfolio grows with monthly contributions</span>
+      </summary>
+      <div class="sim-accordion-body">
+        <p class="note" style="margin-bottom:1rem;">
+          Projects how your portfolio could grow with regular monthly contributions. The default
+          return is the value-weighted trailing 12-month gain of the ETFs/stocks you actually hold
+          ({{ sim_return_pct|floatformat:1 }}%/yr) — tweak any input, then run it. Shows value before
+          and after German capital-gains tax.
+        </p>
+        <form class="sim-form"
+              hx-post="/portfolio/simulate/"
+              hx-target="#sim-output"
+              hx-swap="innerHTML"
+              hx-trigger="submit">
+          {% csrf_token %}
+          <div class="sim-inputs">
+            <label class="sim-field">Start amount (€)
+              <input class="sim-input" type="number" name="start_amount" value="{{ sim_start_amount }}" min="0" step="any">
+            </label>
+            <label class="sim-field">Monthly (€)
+              <input class="sim-input" type="number" name="monthly_contribution" value="{{ sim_monthly }}" min="0" step="any">
+            </label>
+            <label class="sim-field">Years
+              <input class="sim-input" type="number" name="years" value="{{ sim_years }}" min="1" max="50" step="1">
+            </label>
+            <label class="sim-field">Return %/yr
+              <input class="sim-input" type="number" name="annual_return_pct" value="{{ sim_return_pct }}" min="0" max="50" step="any">
+            </label>
+            <label class="sim-field">Asset type
+              <select class="sim-input" name="asset_type">
+                {% for t in discover_asset_types %}
+                <option value="{{ t.value }}">{{ t.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <button type="submit" class="btn btn-sm" style="margin-top:0.75rem;">Run Simulation</button>
+        </form>
+        <div id="sim-output" style="margin-top:1rem;">
+          <p style="color:var(--muted);font-size:0.9rem;">
+            Click <strong>Run Simulation</strong> to project your portfolio's growth.
+          </p>
+        </div>
       </div>
-      <button type="submit" class="btn btn-sm" style="margin-top:0.75rem;">Run Simulation</button>
-    </form>
-    <div id="sim-output" style="margin-top:1rem;">
-      <p style="color:var(--muted);font-size:0.9rem;">
-        Click <strong>Run Simulation</strong> to project your portfolio's growth.
-      </p>
-    </div>
+    </details>
   </div>
 
   <!-- ── Bottom two-column grid ──────────────────────────────────────────── -->
@@ -267,14 +268,6 @@
   {% endif %}
 
   <script>
-  function switchHoldingsTab(btn, name) {
-    document.querySelectorAll('#holdings-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
-    document.querySelectorAll('#holdings-tabs ~ .tab-panel').forEach(function(p){ p.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
-    var panel = document.getElementById('htab-' + name);
-    if (panel) panel.classList.add('active');
-  }
-
   (function () {
     if (window.Chart) return;
     var s = document.createElement('script');

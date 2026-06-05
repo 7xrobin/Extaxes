@@ -319,14 +319,42 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
 /* Discover accordion */
 .discover-accordion { padding: 0; }
 .discover-summary { display: flex; align-items: center; gap: 0.5rem; list-style: none;
-                    padding: 1rem 1.25rem; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+                    padding: 1rem 0; cursor: pointer; font-size: 0.9rem; font-weight: 600;
                     color: var(--text); border-bottom: 1px solid var(--border); }
 .discover-summary::-webkit-details-marker { display: none; }
 .discover-summary::before { content: '›'; color: var(--muted); font-size: 1.1rem;
                              transition: transform 0.2s; display: inline-block; }
 .discover-accordion[open] > .discover-summary::before { transform: rotate(90deg); }
-.discover-accordion > .tabs { margin: 1rem 1.25rem 0; }
-.discover-accordion > .tab-panel { padding: 0 1.25rem 1.25rem; }
+.discover-accordion-body { padding-top: 1rem; }
+
+/* Discover section (always-visible, above holdings table) */
+.discover-section { border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; margin-bottom: 1.25rem; }
+.discover-section-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+                           letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.75rem; }
+.discover-top-row { display: flex; align-items: center; justify-content: space-between;
+                    gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.discover-top-note { margin: 0; flex: 1; min-width: 0; }
+.discover-top-row .btn { white-space: nowrap; padding: 0.6rem 1.1rem; font-size: 0.95rem; flex-shrink: 0; }
+
+/* Simulation accordion (inside holdings tab) */
+.sim-accordion { border-top: 1px solid var(--border); margin-top: 1.25rem; }
+.sim-summary { display: flex; align-items: baseline; gap: 0.75rem; list-style: none;
+               padding: 0.85rem 0; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+               color: var(--text); }
+.sim-summary::-webkit-details-marker { display: none; }
+.sim-summary::before { content: '›'; color: var(--muted); font-size: 1.1rem;
+                       transition: transform 0.2s; display: inline-block; flex-shrink: 0; }
+.sim-accordion[open] > .sim-summary::before { transform: rotate(90deg); }
+.sim-summary-hint { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+.sim-accordion-body { padding-bottom: 1rem; }
+
+/* Editable holding inputs */
+.holding-edit-input { background: transparent; border: 1px solid transparent;
+                      color: var(--text); width: 90px; font-size: 0.82rem;
+                      padding: 0.15rem 0.3rem; border-radius: 4px;
+                      transition: border-color 0.15s, background 0.15s; font-family: inherit; }
+.holding-edit-input:hover { border-color: var(--border); background: var(--bg); }
+.holding-edit-input:focus { border-color: var(--accent); background: var(--bg); outline: none; }
 
 /* Quick-add form */
 .quick-add-form { padding: 0.75rem 1rem; background: var(--bg);

@@ -19,8 +19,24 @@
       <td>
         {{ h.plan_category|default:h.get_asset_type_display }}{% if h.asset_type == "etf_acc" %} <sup class="type-badge" title="Accumulating ETF">*Acc</sup>{% elif h.asset_type == "etf_dist" %} <sup class="type-badge" title="Distributing ETF">*Dist</sup>{% endif %}
       </td>
-      <td>{{ h.units }}</td>
-      <td>€{{ h.avg_purchase_price|floatformat:2 }}</td>
+      <td>
+        <input class="holding-edit-input" type="number"
+               name="units" value="{{ h.units }}"
+               min="0.0001" step="any"
+               hx-post="/portfolio/holdings/{{ h.pk }}/update/"
+               hx-trigger="change"
+               hx-target="#holdings-table-container"
+               hx-swap="innerHTML">
+      </td>
+      <td>
+        <input class="holding-edit-input" type="number"
+               name="avg_purchase_price" value="{{ h.avg_purchase_price }}"
+               min="0.01" step="any"
+               hx-post="/portfolio/holdings/{{ h.pk }}/update/"
+               hx-trigger="change"
+               hx-target="#holdings-table-container"
+               hx-swap="innerHTML">
+      </td>
       <td>€{{ h.current_price|floatformat:2 }}</td>
       <td>€{{ h.current_value|floatformat:0 }}</td>
       <td class="{% if h.unrealised_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
