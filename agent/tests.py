@@ -13,7 +13,7 @@ from agent.tax_engine import (
     STANDARD_RATE, TEILFREISTELLUNG,
 )
 from agent.nodes import (
-    _extract_number, _parse_goals, _estimate_tax_bracket,
+    _extract_number, _estimate_tax_bracket,
     _msg_role, _msg_content, route_after_intake, route_after_qa,
     intake_node, analysis_node, fetch_prices_node,
     retrieve_node, simulate_node,
@@ -229,37 +229,6 @@ class ExtractNumberTest(unittest.TestCase):
     def test_sentence_with_number(self):
         result = _extract_number("I have about 15000 saved")
         self.assertEqual(result, 15000.0)
-
-
-class ParseGoalsTest(unittest.TestCase):
-    def test_single_goal(self):
-        goals = _parse_goals("financial independence")
-        self.assertEqual(len(goals), 1)
-        self.assertEqual(goals[0]["name"], "financial independence")
-        self.assertEqual(goals[0]["priority"], 1)
-
-    def test_multiple_goals_split_by_comma(self):
-        goals = _parse_goals("financial independence, buy a house by 2030")
-        self.assertEqual(len(goals), 2)
-        self.assertEqual(goals[1]["priority"], 2)
-
-    def test_not_sure_returns_fallback(self):
-        goals = _parse_goals("not sure")
-        self.assertEqual(len(goals), 1)
-        self.assertEqual(goals[0]["name"], "grow savings")
-
-    def test_skip_returns_fallback(self):
-        goals = _parse_goals("skip")
-        self.assertEqual(len(goals), 1)
-
-    def test_dont_know_returns_fallback(self):
-        goals = _parse_goals("don't know")
-        self.assertEqual(len(goals), 1)
-
-    def test_goals_have_required_keys(self):
-        goals = _parse_goals("save more")
-        required = {"name", "target_amount", "target_date", "monthly_allocation", "priority"}
-        self.assertEqual(set(goals[0].keys()), required)
 
 
 class EstimateTaxBracketTest(unittest.TestCase):
@@ -542,9 +511,9 @@ class IntakeNodeTest(unittest.TestCase):
         self.assertEqual(result["intake_step"], 2)
 
     def test_after_all_questions_moves_to_upload(self):
-        # Simulate state with step=6 (all questions answered)
+        # Simulate state with step=5 (all questions answered)
         state = self._make_state(
-            intake_step=6,
+            intake_step=5,
             messages=[{"role": "user", "content": "72000"}],
         )
         result = intake_node(state)
@@ -552,9 +521,9 @@ class IntakeNodeTest(unittest.TestCase):
 
     def test_parses_risk_profile_c_as_growth(self):
         state = self._make_state(
-            intake_step=5,
+            intake_step=4,
             messages=[
-                {"role": "assistant", "content": "Q5"},
+                {"role": "assistant", "content": "Q4"},
                 {"role": "user", "content": "C"},
             ],
         )
@@ -563,9 +532,9 @@ class IntakeNodeTest(unittest.TestCase):
 
     def test_parses_risk_profile_a_as_conservative(self):
         state = self._make_state(
-            intake_step=5,
+            intake_step=4,
             messages=[
-                {"role": "assistant", "content": "Q5"},
+                {"role": "assistant", "content": "Q4"},
                 {"role": "user", "content": "A"},
             ],
         )

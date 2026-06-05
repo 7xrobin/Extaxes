@@ -6,7 +6,7 @@ Investment strategy assistant for expats in Germany. Tracks ETFs  explains Germa
 
 ## What it does
 
-1. **Onboards** you through six questions (savings, emergency fund, monthly budget, goals, risk tolerance, salary) in a conversational chat interface.
+1. **Onboards** you through five questions (savings, emergency fund, monthly budget, risk tolerance, salary) in a conversational chat interface.
 2. **Proposes a strategy** via LLM Model: allocation across asset categories, exit rules, and one plain-English tax insight.
 3. **Generate investment suggestions** Based on your strategy and tax advantages in Germany.
 4. **Calculates taxes** — Abgeltungsteuer, Teilfreistellung, Vorabpauschale, Sparerpauschbetrag — using the current German tax rules, without calling an external service.
@@ -175,7 +175,6 @@ class AgentState(MessagesState):
     emergency_fund_floor: float
     investable_surplus: float
     monthly_investment_budget: float
-    goals: list[GoalState]
     risk_profile: str       # "conservative" | "balanced" | "growth"
     tax_bracket: float      # estimated marginal rate (0.14 – 0.42)
     is_married: bool        # affects Sparerpauschbetrag allowance
@@ -201,7 +200,7 @@ class AgentState(MessagesState):
 
 | Node | LLM? | Reads | Writes |
 |---|---|---|---|
-| `intake_node` | No | `intake_step`, `messages` | `savings_total`, `emergency_fund_floor`, `goals`, `risk_profile`, `tax_bracket`, next question message |
+| `intake_node` | No | `intake_step`, `messages` | `savings_total`, `emergency_fund_floor`, `risk_profile`, `tax_bracket`, next question message |
 | `upload_node` | No | Django DB (`Holding`, `UserProfile`) | `holdings` list in AgentState |
 | `analysis_node` | No | `holdings` (from state), yfinance prices | `holdings` (with live prices), `tax` (TaxState), totals |
 | `plan_node` | GPT-4o | Full AgentState context | `approved_strategy`, plan message |

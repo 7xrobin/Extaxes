@@ -2,14 +2,6 @@ from typing import TypedDict
 from langgraph.graph import MessagesState
 
 
-class GoalState(TypedDict):
-    name: str
-    target_amount: float
-    target_date: str
-    monthly_allocation: float
-    priority: int
-
-
 class HoldingState(TypedDict):
     ticker: str
     isin: str
@@ -52,7 +44,6 @@ class AgentState(MessagesState):
     emergency_fund_floor: float
     investable_surplus: float
     monthly_investment_budget: float
-    goals: list[GoalState]
     risk_profile: str
     tax_bracket: float
     is_married: bool

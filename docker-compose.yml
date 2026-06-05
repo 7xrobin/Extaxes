@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16
+    container_name: investbuddy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-investbuddy}
+      POSTGRES_USER: ${POSTGRES_USER:-investbuddy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-investbuddy}
+    # Host port 5433 → container 5432. A local Postgres already owns 5432 on this
+    # machine, so we map the published port one higher to avoid the clash.
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-investbuddy} -d ${POSTGRES_DB:-investbuddy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

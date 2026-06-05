@@ -435,7 +435,7 @@ User profile:
 Return a JSON object with key "suggestions" containing an array of exactly 6 suggestion objects.
 """
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.AGENT_MODEL,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
@@ -534,21 +534,35 @@ def quick_add(request):
     if not created:
         h.units += units
         h.plan_category = plan_category or h.plan_category
-        h.save(update_fields=['units', 'plan_category'])
+        cost = h.units * h.avg_purchase_price
+        h.current_value = h.units * h.current_price
+        h.unrealised_gain = h.current_value - cost
+        h.unrealised_gain_pct = (h.unrealised_gain / cost * 100) if cost > 0 else 0
+        h.save(update_fields=[
+            'units', 'plan_category', 'current_value', 'unrealised_gain', 'unrealised_gain_pct',
+        ])
     ExitRule.objects.get_or_create(holding=h)
 
-    # Recompute category bars for OOB swap
     holdings = list(profile.holdings.all())
     strategy_data = profile.approved_strategy_data
+
+    # OOB: category bars
     category_coverage = _compute_category_coverage(strategy_data, holdings)
     bars_html = render_to_string(
         'portfolio/category_bars.html',
         {'category_coverage': category_coverage},
     )
 
+    # OOB: holdings table + totals summary
+    totals = _totals_dict(holdings, "ALL")
+    totals_html = render_to_string('portfolio/totals.html', {'totals': totals})
+    table_html = render_to_string('portfolio/holdings.html', {'holdings': holdings})
+
     response = f'<div class="add-done">✓ Added {ticker} to Holdings</div>'
-    oob = f'<div id="category-bars" hx-swap-oob="true">{bars_html}</div>'
-    return HttpResponse(response + oob)
+    oob_bars = f'<div id="category-bars" hx-swap-oob="true">{bars_html}</div>'
+    oob_totals = f'<div id="portfolio-totals" hx-swap-oob="true">{totals_html}</div>'
+    oob_table = f'<div id="holdings-table-container" hx-swap-oob="innerHTML">{table_html}</div>'
+    return HttpResponse(response + oob_bars + oob_totals + oob_table)
 
 
 _AI_REVIEW_SYSTEM = """You are InvestBuddy, a financial assistant for expats in Germany.
@@ -587,7 +601,7 @@ def ai_review_partial(request):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.AGENT_MODEL,
         messages=[
             {"role": "system", "content": _AI_REVIEW_SYSTEM},
             {"role": "user",   "content": user_prompt},

@@ -58,11 +58,6 @@ INTAKE_QUESTIONS = [
     ("monthly_investment_budget",
      "How much can you invest each month going forward?"),
 
-    ("goals",
-     "What are you investing for? You can have multiple goals — for example: "
-     "'financial independence', 'buy a house by 2030', 'just grow my savings'. "
-     "List them all, or say 'not sure yet' if you haven't decided."),
-
     ("risk_profile",
      "Last question for onboarding: how would you feel if your portfolio dropped 20% "
      "in a bad year?\n"
@@ -144,8 +139,6 @@ def _parse_intake_answer(state: dict, step: int, answer: str) -> dict:
         )
     elif field == "monthly_investment_budget":
         state["monthly_investment_budget"] = _extract_number(answer)
-    elif field == "goals":
-        state["goals"] = _parse_goals(answer)
     elif field == "risk_profile":
         mapping = {"a": "conservative", "b": "balanced", "c": "growth"}
         state["risk_profile"] = mapping.get(answer.lower()[0], "balanced")
@@ -165,26 +158,6 @@ def _extract_number(text: str) -> float:
     if match.group(2) == "k":
         val *= 1000
     return val
-
-
-def _parse_goals(text: str) -> list[dict]:
-    """Parse free-text goals into Goal list."""
-    if any(w in text.lower() for w in ["not sure", "skip", "unsure", "don't know"]):
-        return [{"name": "grow savings", "target_amount": 0,
-                 "target_date": "open", "monthly_allocation": 0, "priority": 1}]
-    goals = []
-    for i, part in enumerate(text.split(",")):
-        part = part.strip()
-        if part:
-            goals.append({
-                "name": part,
-                "target_amount": 0,
-                "target_date": "open",
-                "monthly_allocation": 0,
-                "priority": i + 1,
-            })
-    return goals or [{"name": "grow savings", "target_amount": 0,
-                      "target_date": "open", "monthly_allocation": 0, "priority": 1}]
 
 
 def _estimate_tax_bracket(text: str) -> float:
@@ -398,7 +371,7 @@ IMPORTANT RULES:
 
 
 def plan_node(state: AgentState) -> AgentState:
-    """GPT-4o call — generates/revises diversification plan with exit rules."""
+    """LLM call — generates/revises diversification plan with exit rules."""
     messages = list(state.get("messages", []))
 
     # If the user sent an adjustment request (re-running after approval), include it
@@ -419,7 +392,6 @@ User profile:
 - Monthly budget: €{state.get('monthly_investment_budget', 0):,.0f}/month
 - Risk profile: {state.get('risk_profile', 'balanced')}
 - Tax bracket: {state.get('tax_bracket', 0.42) * 100:.0f}%
-- Goals: {[g['name'] for g in state.get('goals', [])]}
 
 Current portfolio: {len(state.get('holdings', []))} positions
 Total invested: €{state.get('total_invested', 0):,.0f}
@@ -432,7 +404,7 @@ Tax status:
 {adjustment_section}
 Propose:
 1. A suggested allocation across 2-4 ETF/asset categories (not specific products)
-2. How to split the €{state.get('monthly_investment_budget', 0):,.0f}/month budget across goals
+2. How to split the €{state.get('monthly_investment_budget', 0):,.0f}/month budget across the suggested categories
 3. Simple exit rules: when it makes sense to review or take profits
 4. One plain-English tax insight relevant to their situation
 
@@ -441,7 +413,7 @@ Choose category names ONLY from this fixed list (so the strategy, suggestions, a
 
 After the prose, append a fenced JSON block (```json ... ```) with the structured allocation in this exact shape, using the same categories you proposed (names must match the list above exactly):
 {{"categories": [{{"name": "Core World ETF", "allocation_pct": 60}}, ...], "total_target_amount": <number in euros>}}
-The allocation_pct values must sum to 100. The total_target_amount is the user's intended invested capital target (e.g. investable_surplus, or annual budget × years for long-horizon goals — pick a sensible number).
+The allocation_pct values must sum to 100. The total_target_amount is the user's intended invested capital target (e.g. investable_surplus, or annual budget × years for a long horizon — pick a sensible number).
 """
 
     # Review gate: generate the plan, then verify the equity weight matches the
@@ -456,8 +428,7 @@ The allocation_pct values must sum to 100. The total_target_amount is the user's
 
     for attempt in range(MAX_PLAN_ALIGNMENT_RETRIES + 1):
         response = client.chat.completions.create(
-            # TODO: Make this callable with a flag for model choice, default to gpt-4o-mini
-            model="gpt-4o",
+            model=settings.AGENT_MODEL,
             messages=[
                 {"role": "system", "content": PLAN_SYSTEM_PROMPT},
                 {"role": "user",   "content": context + correction},
@@ -635,12 +606,12 @@ def _classify_intent(last_user: str) -> str:
     say so), but dropping a real edit silently saves the wrong strategy.
     """
     intent_resp = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": _APPROVAL_CLASSIFIER_PROMPT},
-            {"role": "user",   "content": last_user},
-        ],
-        max_tokens=3,
+            model=settings.AGENT_MODEL,
+            messages=[
+                {"role": "system", "content": _APPROVAL_CLASSIFIER_PROMPT},
+                {"role": "user",   "content": last_user},
+            ],
+            max_tokens=3,
         temperature=0,
         seed=42,
     )
@@ -782,7 +753,7 @@ def answer_node(state: AgentState) -> AgentState:
 
     logger.info("answer_node: generating reply (strategy_saved=%s)", strategy_saved)
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.AGENT_MODEL,
         messages=conversation,
         max_tokens=400,
     )
@@ -817,7 +788,7 @@ Rules:
 
 
 def digest_node(state: dict) -> dict:
-    """GPT-4o call — generates weekly plain-English digest."""
+    """LLM call — generates weekly plain-English digest."""
     holdings = state.get("holdings", [])
     holdings_summary = "\n".join([
         f"  {h['ticker']}: €{h.get('current_value', 0):,.0f} | "
@@ -843,7 +814,6 @@ Tax status:
 
 Monthly plan:
   Budget: €{state.get('monthly_investment_budget', 0):,.0f}/month
-  Goals: {[g['name'] for g in state.get('goals', [])]}
   Approved strategy: {state.get('approved_strategy', {}).get('plan_text', 'Not yet defined')[:200]}
 """
 
@@ -853,7 +823,7 @@ Monthly plan:
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.AGENT_MODEL,
         messages=[
             {"role": "system", "content": DIGEST_SYSTEM_PROMPT},
             {"role": "user",   "content": context},

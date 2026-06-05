@@ -1,3 +1,9 @@
+db-up:
+    docker compose up -d db
+
+db-down:
+    docker compose down
+
 server:
     uv run python manage.py runserver
 

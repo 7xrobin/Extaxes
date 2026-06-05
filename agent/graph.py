@@ -5,10 +5,11 @@ Agent tools are first-class nodes here: `fetch_prices` (live prices), `retrieve`
 (tax-source RAG) and `simulate` (growth projection) each run as their own graph
 step and LangSmith span, feeding the deterministic/answer nodes around them.
 """
-import sqlite3
 import logging
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
+from psycopg.rows import dict_row
 from django.conf import settings
 from .state import AgentState
 from . import nodes
@@ -59,9 +60,17 @@ def build_graph():
 
     builder.add_edge("digest", END)
 
-    # Open a persistent connection — check_same_thread=False required for Django
-    conn = sqlite3.connect(settings.LANGGRAPH_DB_PATH, check_same_thread=False)
-    memory = SqliteSaver(conn)
+    # Persistent Postgres-backed checkpointer. A connection pool keeps the graph
+    # safe across Django's threaded request handling; autocommit + dict_row are
+    # required by PostgresSaver, and prepare_threshold=0 keeps it pooler-friendly.
+    pool = ConnectionPool(
+        conninfo=settings.LANGGRAPH_DB_URL,
+        max_size=20,
+        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+        open=True,
+    )
+    memory = PostgresSaver(pool)
+    memory.setup()  # idempotent — creates checkpoint tables on first run
     compiled = builder.compile(
         checkpointer=memory,
         interrupt_before=["intake", "qa"],

@@ -58,10 +58,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "investbuddy.wsgi.application"
 
+# ── Database ──────────────────────────────────────────────────────────────────
+# PostgreSQL via psycopg3. Defaults match docker-compose.yml (Postgres published
+# on host port 5433 to avoid clashing with a local Postgres on 5432).
+POSTGRES_DB = os.getenv("POSTGRES_DB", "investbuddy")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "investbuddy")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "investbuddy")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5433")
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": POSTGRES_DB,
+        "USER": POSTGRES_USER,
+        "PASSWORD": POSTGRES_PASSWORD,
+        "HOST": POSTGRES_HOST,
+        "PORT": POSTGRES_PORT,
     }
 }
 
@@ -94,6 +107,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Agent model selection for chat completions
+AGENT_MODEL = os.getenv("AGENT_MODEL", "gpt-4o")
 
 # Embedding model for the tax-source RAG index (rag app)
 RAG_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -195,5 +211,11 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/chat/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
-# LangGraph memory database — separate from Django DB
-LANGGRAPH_DB_PATH = str(BASE_DIR / "langgraph_memory.sqlite3")
+# LangGraph memory database — its checkpoint tables live in the same Postgres
+# instance as the Django ORM (separate tables, no clash). Override with
+# LANGGRAPH_DB_URL to point the checkpointer at a different database.
+LANGGRAPH_DB_URL = os.getenv(
+    "LANGGRAPH_DB_URL",
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+    f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}",
+)
