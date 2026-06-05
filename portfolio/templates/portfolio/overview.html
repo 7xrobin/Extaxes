@@ -207,41 +207,17 @@
       </div>
 
       <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1rem;">
-        {% if holdings_chart_data %}
-        <canvas id="holdings-chart" width="180" height="180" style="margin:0 auto;"></canvas>
+        <canvas id="holdings-chart" width="180" height="180"
+                style="margin:0 auto;{% if not holdings_chart_data %}display:none;{% endif %}"></canvas>
         <div id="holdings-legend" style="margin-top:0.75rem;width:100%;"></div>
-        {% else %}
-        <p class="strategy-empty" style="text-align:center;padding:1rem 0;">No holdings to chart yet.</p>
-        {% endif %}
+        <p id="holdings-chart-empty" class="strategy-empty"
+           style="text-align:center;padding:1rem 0;{% if holdings_chart_data %}display:none;{% endif %}">
+          No holdings to chart yet.
+        </p>
       </div>
 
-      <div class="review-holdings-list">
-        {% if holdings %}
-        <table class="compact-table">
-          <thead>
-            <tr>
-              <th>Ticker</th>
-              <th>Category</th>
-              <th>Value</th>
-              <th>Gain</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for h in holdings %}
-            <tr>
-              <td><strong>{{ h.ticker }}</strong></td>
-              <td style="color:var(--muted);">{{ h.plan_category|default:h.get_asset_type_display }}{% if h.asset_type == "etf_acc" %} <sup class="type-badge" title="Accumulating ETF">*Acc</sup>{% elif h.asset_type == "etf_dist" %} <sup class="type-badge" title="Distributing ETF">*Dist</sup>{% endif %}</td>
-              <td>€{{ h.current_value|floatformat:0 }}</td>
-              <td class="{% if h.unrealised_gain_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">
-                {% if h.unrealised_gain_pct >= 0 %}+{% endif %}{{ h.unrealised_gain_pct|floatformat:1 }}%
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0;">No holdings yet.</p>
-        {% endif %}
+      <div id="review-holdings-table" class="review-holdings-list">
+        {% include "portfolio/review_table_partial.html" %}
       </div>
 
       <div id="ai-review-output" style="margin-top:0.75rem;"></div>
@@ -263,9 +239,7 @@
   {% if strategy_data %}
     {{ strategy_data|json_script:"strategy-json" }}
   {% endif %}
-  {% if holdings_chart_data %}
-    {{ holdings_chart_data|json_script:"holdings-chart-data" }}
-  {% endif %}
+  {{ holdings_chart_data|json_script:"holdings-chart-data" }}
 
   <script>
   (function () {
@@ -350,14 +324,22 @@
     if (!el) return;
     var items = [];
     try { items = JSON.parse(el.textContent) || []; } catch (e) { return; }
-    if (!items.length) return;
+    var canvas   = document.getElementById('holdings-chart');
+    var legend   = document.getElementById('holdings-legend');
+    var emptyMsg = document.getElementById('holdings-chart-empty');
+    if (!canvas) return;
+    if (!items.length) {
+      canvas.style.display = 'none';
+      if (emptyMsg) emptyMsg.style.display = 'block';
+      if (legend) legend.innerHTML = '';
+      return;
+    }
+    canvas.style.display = 'block';
+    if (emptyMsg) emptyMsg.style.display = 'none';
     var labels = items.map(function(d){ return d.label; });
     var data   = items.map(function(d){ return d.value; });
     var total  = data.reduce(function(a, b){ return a + b; }, 0);
     var colors = labels.map(function(_, i){ return CHART_COLORS[i % CHART_COLORS.length]; });
-    var canvas = document.getElementById('holdings-chart');
-    var legend = document.getElementById('holdings-legend');
-    if (!canvas) return;
     if (!window.Chart) { setTimeout(updateHoldingsChart, 300); return; }
     if (holdingsChart) {
       holdingsChart.data.labels = labels;
@@ -426,6 +408,7 @@
   document.body.addEventListener('htmx:afterSwap', function(){
     updateAllocChart();
     renderSimChart();
+    updateHoldingsChart();
   });
   </script>
 </div>

@@ -32,6 +32,30 @@ DISCOVER_PERIODS = ["1M", "3M", "6M", "YTD", "1Y"]
 _CATEGORY_COLORS = ['#4f8ef7', '#3ecf8e', '#f87171', '#f7c948', '#a78bfa', '#fb923c']
 
 
+def _compute_holdings_chart_data(holdings):
+    hcd: dict[str, float] = {}
+    for h in holdings:
+        label = h.plan_category or h.get_asset_type_display()
+        hcd[label] = hcd.get(label, 0.0) + (h.current_value or 0.0)
+    return [
+        {"label": k, "value": round(v)}
+        for k, v in sorted(hcd.items(), key=lambda x: -x[1])
+        if v > 0
+    ]
+
+
+def _review_oob(holdings):
+    """OOB HTML that refreshes the Invested Portfolio Review card (table + chart data)."""
+    table_html = render_to_string("portfolio/review_table_partial.html", {"holdings": holdings})
+    chart_json = json.dumps(_compute_holdings_chart_data(holdings))
+    oob_table = f'<div id="review-holdings-table" hx-swap-oob="innerHTML">{table_html}</div>'
+    oob_chart = (
+        f'<script id="holdings-chart-data" type="application/json"'
+        f' hx-swap-oob="true">{chart_json}</script>'
+    )
+    return oob_table + oob_chart
+
+
 def _compute_category_coverage(strategy_data, holdings):
     if not strategy_data:
         return []
@@ -189,15 +213,7 @@ def overview(request):
 
     category_coverage = _compute_category_coverage(strategy_data, holdings)
 
-    _hcd: dict[str, float] = {}
-    for h in holdings:
-        label = h.plan_category or h.get_asset_type_display()
-        _hcd[label] = _hcd.get(label, 0.0) + (h.current_value or 0.0)
-    holdings_chart_data = [
-        {"label": k, "value": round(v)}
-        for k, v in sorted(_hcd.items(), key=lambda x: -x[1])
-        if v > 0
-    ]
+    holdings_chart_data = _compute_holdings_chart_data(holdings)
 
     return render(request, "portfolio/overview.html", {
         "profile":             profile,
@@ -562,7 +578,7 @@ def quick_add(request):
     oob_bars = f'<div id="category-bars" hx-swap-oob="true">{bars_html}</div>'
     oob_totals = f'<div id="portfolio-totals" hx-swap-oob="true">{totals_html}</div>'
     oob_table = f'<div id="holdings-table-container" hx-swap-oob="innerHTML">{table_html}</div>'
-    return HttpResponse(response + oob_bars + oob_totals + oob_table)
+    return HttpResponse(response + oob_bars + oob_totals + oob_table + _review_oob(holdings))
 
 
 _AI_REVIEW_SYSTEM = """You are InvestBuddy, a financial assistant for expats in Germany.
@@ -688,4 +704,8 @@ def update_holding(request, pk):
     except (ValueError, TypeError):
         pass
     holdings = list(profile.holdings.all())
-    return render(request, 'portfolio/holdings.html', {'holdings': holdings})
+    totals = _totals_dict(holdings, "ALL")
+    totals_html = render_to_string("portfolio/totals.html", {"totals": totals})
+    table_html = render_to_string("portfolio/holdings.html", {"holdings": holdings})
+    oob = f'<div id="portfolio-totals" hx-swap-oob="true">{totals_html}</div>'
+    return HttpResponse(table_html + oob + _review_oob(holdings))

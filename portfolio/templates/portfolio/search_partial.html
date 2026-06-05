@@ -31,10 +31,43 @@
     </p>
     {% endif %}
     <div style="margin-top:0.75rem;">
-      <a href="/portfolio/upload/" class="btn btn-outline" style="font-size:0.85rem;">+ Add to Portfolio</a>
+      <button type="button" class="btn btn-sm btn-outline"
+              onclick="toggleSearchAddForm()">+ Add to Portfolio</button>
+    </div>
+    <div id="search-add-form" style="display:none;margin-top:0.75rem;">
+      <form hx-post="/portfolio/quick-add/"
+            hx-target="#search-add-result"
+            hx-swap="innerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="ticker"        value="{{ result.ticker }}">
+        <input type="hidden" name="asset_type"    value="{{ result.asset_type }}">
+        <input type="hidden" name="current_price" value="{{ result.current_price|default:0 }}">
+        <div class="quick-add-fields">
+          <label class="quick-add-label">Units
+            <input class="quick-add-input" type="number" name="units"
+                   placeholder="e.g. 10" min="0.0001" step="any" required>
+          </label>
+          <label class="quick-add-label">Avg Price (€)
+            <input class="quick-add-input" type="number" name="avg_purchase_price"
+                   placeholder="{{ result.current_price|default:'0.00'|floatformat:2 }}"
+                   value="{{ result.current_price|default:''|floatformat:2 }}"
+                   min="0.0001" step="any" required>
+          </label>
+          <button type="submit" class="btn btn-sm">Confirm</button>
+          <button type="button" class="btn btn-sm btn-outline"
+                  onclick="toggleSearchAddForm()">Cancel</button>
+        </div>
+      </form>
+      <div id="search-add-result"></div>
     </div>
   </div>
 </div>
+<script>
+function toggleSearchAddForm() {
+  var f = document.getElementById('search-add-form');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+</script>
 {% elif query %}
 <p style="color:var(--muted);font-size:0.9rem;">No result for "{{ query }}".</p>
 {% endif %}
