@@ -354,7 +354,7 @@
       holdingsChart = new Chart(canvas, {
         type: 'doughnut',
         data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#1a1d27', hoverOffset: 4 }] },
-        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.label + ': €' + ctx.parsed.toLocaleString(); } } } }, cutout: '65%' }
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.label + ': €' + ctx.parsed.toLocaleString() + ' invested'; } } } }, cutout: '65%' }
       });
     }
     if (legend) {

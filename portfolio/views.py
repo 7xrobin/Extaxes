@@ -36,7 +36,8 @@ def _compute_holdings_chart_data(holdings):
     hcd: dict[str, float] = {}
     for h in holdings:
         label = h.plan_category or h.get_asset_type_display()
-        hcd[label] = hcd.get(label, 0.0) + (h.current_value or 0.0)
+        cost = h.units * h.avg_purchase_price
+        hcd[label] = hcd.get(label, 0.0) + cost
     return [
         {"label": k, "value": round(v)}
         for k, v in sorted(hcd.items(), key=lambda x: -x[1])
