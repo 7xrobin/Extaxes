@@ -444,10 +444,18 @@ th     { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; lett
 
 /* ── Discover attribute filters ────────────────────────────────────────────── */
 .discover-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                    gap: 0.75rem; align-items: end; }
+                    gap: 0.75rem; align-items: end; margin-top: 1rem;
+                    transition: opacity 0.2s; }
+.discover-filters.filters-disabled { opacity: 0.35; pointer-events: none; }
 .discover-filter-check { flex-direction: row; align-items: center; gap: 0.45rem;
                          color: var(--text); font-size: 0.82rem; }
 .discover-filter-check input { width: auto; }
+.filter-hint { font-size: 0.68rem; color: var(--muted); font-weight: 400; font-style: italic; }
+
+/* ── Allocation percentage badge on suggestion cards ───────────────────────── */
+.alloc-badge { font-size: 0.78rem; font-weight: 700; color: var(--accent);
+               background: rgba(79, 142, 247, 0.12); border: 1px solid rgba(79, 142, 247, 0.35);
+               padding: 0.15rem 0.55rem; border-radius: 99px; white-space: nowrap; }
 
 /* ── Growth Simulation card ────────────────────────────────────────────────── */
 .sim-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

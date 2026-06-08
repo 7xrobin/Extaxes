@@ -1,108 +1,92 @@
 {% if suggestions %}
 {{ suggestions|json_script:"suggestions-json" }}
 
-{% if buckets|length > 1 %}
-<div class="tabs bucket-tabs" id="bucket-tabs">
-  {% for b in buckets %}
-  <button class="tab {% if forloop.first %}active{% endif %}" type="button"
-          onclick="switchBucketTab(this,'{{ b.slug }}')">
-    {{ b.name }} <span class="bucket-count">{{ b.items|length }}</span>
-  </button>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% for b in buckets %}
-<div class="bucket-panel {% if forloop.first %}active{% endif %}" id="bucket-{{ b.slug }}"
-     {% if buckets|length > 1 and not forloop.first %}style="display:none;"{% endif %}>
-  <div class="suggestion-cards-group" style="display:flex;flex-direction:column;gap:0.65rem;">
-    {% for s in b.items %}
-    <div class="suggestion-card-wrap" id="wrap-{{ s.ticker|slugify }}">
-      <label class="suggestion-card">
-        <input type="checkbox" class="suggestion-check" value="{{ s.ticker }}"
-               data-category="{{ s.plan_category }}"
-               data-alloc="{{ s.allocation_pct }}"
-               onchange="updateAllocChart()"
-               style="display:none;">
-        <div class="suggestion-card-inner">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <span class="suggestion-ticker">{{ s.ticker }}</span>
-              <span class="suggestion-type">{{ s.asset_type }}</span>
-            </div>
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-              <span class="suggestion-price">
-                {% if s.current_price %}€{{ s.current_price|floatformat:2 }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
-              </span>
-              <button type="button" class="btn btn-sm btn-outline"
-                      onclick="toggleAddForm('{{ s.ticker|slugify }}')">
-                + Add
-              </button>
-            </div>
+<div class="suggestion-cards-group" id="ai-suggestions-list" style="display:flex;flex-direction:column;gap:0.65rem;">
+  {% for s in suggestions %}
+  <div class="suggestion-card-wrap" id="wrap-{{ s.ticker|slugify }}" data-category="{{ s.plan_category }}">
+    <label class="suggestion-card">
+      <input type="checkbox" class="suggestion-check" value="{{ s.ticker }}"
+             data-category="{{ s.plan_category }}"
+             data-alloc="{{ s.allocation_pct }}"
+             onchange="updateAllocChart()"
+             style="display:none;">
+      <div class="suggestion-card-inner">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <span class="suggestion-ticker">{{ s.ticker }}</span>
+            <span class="suggestion-type">{{ s.asset_type }}</span>
           </div>
-          <div class="suggestion-name">{{ s.name }}</div>
-          <div class="suggestion-meta">
-            <span class="tag">{{ s.plan_category }}</span>
-            {% if s.asset_type == "etf_acc" or s.asset_type == "etf_dist" %}
-            <span class="tag-tax" title="{{ s.tax_note }}">
-              Teilfreistellung {{ s.teilfreistellung_pct }}%
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <span class="suggestion-price">
+              {% if s.current_price %}€{{ s.current_price|floatformat:2 }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
             </span>
-            {% endif %}
-            {% if s.asset_type == "etf_acc" %}
-            <span class="tag-green">★ Tax efficient¹</span>
-            {% endif %}
-          </div>
-          {% if s.warning %}
-          <div class="suggestion-warning" role="alert">⚠ {{ s.warning }}</div>
-          {% endif %}
-          <div class="suggestion-rationale">{{ s.rationale }}</div>
-          <div class="suggestion-perf">
-            <span class="suggestion-perf-label">Gain over</span>
-            <select class="suggestion-period" onchange="updatePeriodGain(this)">
-              {% for p in s.period_perf %}
-              <option value="{{ p.code }}" data-gain="{{ p.gain|floatformat:2 }}">Past {{ p.label }}</option>
-              {% endfor %}
-            </select>
-            <span class="suggestion-period-gain"></span>
+            <button type="button" class="btn btn-sm btn-outline"
+                    onclick="toggleAddForm('{{ s.ticker|slugify }}')">
+              + Add
+            </button>
           </div>
         </div>
-      </label>
-
-      <!-- Inline quick-add form -->
-      <div class="quick-add-form" id="form-{{ s.ticker|slugify }}" style="display:none;">
-        <form hx-post="/portfolio/quick-add/"
-              hx-target="#wrap-{{ s.ticker|slugify }} .quick-add-result"
-              hx-swap="innerHTML">
-          {% csrf_token %}
-          <input type="hidden" name="ticker"           value="{{ s.ticker }}">
-          <input type="hidden" name="asset_type"       value="{{ s.asset_type }}">
-          <input type="hidden" name="plan_category"    value="{{ s.plan_category }}">
-          <input type="hidden" name="current_price"    value="{{ s.current_price|default:0 }}">
-          <div class="quick-add-fields">
-            <label class="quick-add-label">
-              Units
-              <input class="quick-add-input" type="number" name="units"
-                     placeholder="e.g. 10" min="0.0001" step="any" required>
-            </label>
-            <label class="quick-add-label">
-              Avg Price (€)
-              <input class="quick-add-input" type="number" name="avg_purchase_price"
-                     placeholder="{{ s.current_price|default:'0.00'|floatformat:2 }}"
-                     value="{{ s.current_price|default:''|floatformat:2 }}"
-                     min="0.0001" step="any" required>
-            </label>
-            <button type="submit" class="btn btn-sm">Confirm</button>
-            <button type="button" class="btn btn-sm btn-outline"
-                    onclick="toggleAddForm('{{ s.ticker|slugify }}')">Cancel</button>
-          </div>
-        </form>
-        <div class="quick-add-result"></div>
+        <div class="suggestion-name">{{ s.name }}</div>
+        <div class="suggestion-meta">
+          <span class="tag">{{ s.plan_category }}</span>
+          {% if s.asset_type == "etf_acc" or s.asset_type == "etf_dist" %}
+          <span class="tag-tax" title="{{ s.tax_note }}">
+            Teilfreistellung {{ s.teilfreistellung_pct }}%
+          </span>
+          {% endif %}
+          {% if s.asset_type == "etf_acc" %}
+          <span class="tag-green">★ Tax efficient¹</span>
+          {% endif %}
+        </div>
+        {% if s.warning %}
+        <div class="suggestion-warning" role="alert">⚠ {{ s.warning }}</div>
+        {% endif %}
+        <div class="suggestion-rationale">{{ s.rationale }}</div>
+        <div class="suggestion-perf">
+          <span class="suggestion-perf-label">Gain over</span>
+          <select class="suggestion-period" onchange="updatePeriodGain(this)">
+            {% for p in s.period_perf %}
+            <option value="{{ p.code }}" data-gain="{{ p.gain|floatformat:2 }}">Past {{ p.label }}</option>
+            {% endfor %}
+          </select>
+          <span class="suggestion-period-gain"></span>
+        </div>
       </div>
+    </label>
+
+    <!-- Inline quick-add form -->
+    <div class="quick-add-form" id="form-{{ s.ticker|slugify }}" style="display:none;">
+      <form hx-post="/portfolio/quick-add/"
+            hx-target="#wrap-{{ s.ticker|slugify }} .quick-add-result"
+            hx-swap="innerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="ticker"           value="{{ s.ticker }}">
+        <input type="hidden" name="asset_type"       value="{{ s.asset_type }}">
+        <input type="hidden" name="plan_category"    value="{{ s.plan_category }}">
+        <input type="hidden" name="current_price"    value="{{ s.current_price|default:0 }}">
+        <div class="quick-add-fields">
+          <label class="quick-add-label">
+            Units
+            <input class="quick-add-input" type="number" name="units"
+                   placeholder="e.g. 10" min="0.0001" step="any" required>
+          </label>
+          <label class="quick-add-label">
+            Avg Price (€)
+            <input class="quick-add-input" type="number" name="avg_purchase_price"
+                   placeholder="{{ s.current_price|default:'0.00'|floatformat:2 }}"
+                   value="{{ s.current_price|default:''|floatformat:2 }}"
+                   min="0.0001" step="any" required>
+          </label>
+          <button type="submit" class="btn btn-sm">Confirm</button>
+          <button type="button" class="btn btn-sm btn-outline"
+                  onclick="toggleAddForm('{{ s.ticker|slugify }}')">Cancel</button>
+        </div>
+      </form>
+      <div class="quick-add-result"></div>
     </div>
-    {% endfor %}
   </div>
+  {% endfor %}
 </div>
-{% endfor %}
 
 <p style="color:var(--muted);font-size:0.75rem;margin-top:0.75rem;line-height:1.5;">
   ¹ Accumulating ETFs (thesaurierend) reinvest dividends internally — no annual dividend tax.
@@ -118,17 +102,6 @@ function toggleAddForm(slug) {
   var form = document.getElementById('form-' + slug);
   if (!form) return;
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
-}
-
-function switchBucketTab(btn, slug) {
-  document.querySelectorAll('#bucket-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
-  document.querySelectorAll('.bucket-panel').forEach(function(p){
-    p.classList.remove('active');
-    p.style.display = 'none';
-  });
-  if (btn) btn.classList.add('active');
-  var panel = document.getElementById('bucket-' + slug);
-  if (panel) { panel.classList.add('active'); panel.style.display = 'block'; }
 }
 
 function updatePeriodGain(sel) {

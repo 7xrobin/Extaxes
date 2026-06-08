@@ -64,10 +64,14 @@
       </div>
       <div id="search-output" style="margin-bottom:1.25rem;"></div>
 
-      <div id="discover-filters" class="discover-filters">
-        <label class="sim-field">Category
-          <select class="sim-input" name="category">
-            <option value="">Any category</option>
+      <div id="discover-filters" class="discover-filters filters-disabled">
+        <label class="sim-field">
+          <span style="display:flex;align-items:center;gap:0.4rem;">
+            Category
+            <span class="filter-hint">filter results</span>
+          </span>
+          <select class="sim-input" name="category" onchange="filterSuggestionCards(this.value)">
+            <option value="">All categories</option>
             {% for c in discover_categories %}
             <option value="{{ c }}">{{ c }}</option>
             {% endfor %}
@@ -92,7 +96,7 @@
 
       <div id="suggestions-output" style="margin-top:1rem;">
         <p style="color:var(--muted);font-size:0.9rem;">
-          Set filters below and click <strong>✦ Generate AI Suggestions</strong> for ideas tailored to your profile and strategy.
+          Click <strong>✦ Generate AI Suggestions</strong> for picks tailored to your profile and strategy.
         </p>
       </div>
     </div>
@@ -401,14 +405,39 @@
     });
   }
 
+  function filterSuggestionCards(selectedCat) {
+    var cards = document.querySelectorAll('#ai-suggestions-list .suggestion-card-wrap');
+    cards.forEach(function(card) {
+      var match = !selectedCat || card.dataset.category === selectedCat;
+      card.style.display = match ? '' : 'none';
+    });
+  }
+
+  function _updateDiscoverFiltersState() {
+    var hasAi     = !!document.querySelector('#ai-suggestions-list .suggestion-card-wrap');
+    var hasSearch = !!document.querySelector('#search-output .suggestion-card');
+    var filtersEl = document.getElementById('discover-filters');
+    if (!filtersEl) return;
+    if (hasAi || hasSearch) {
+      filtersEl.classList.remove('filters-disabled');
+    } else {
+      filtersEl.classList.add('filters-disabled');
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     if (document.getElementById('strategy-json')) updateAllocChart();
     updateHoldingsChart();
+    _updateDiscoverFiltersState();
   });
   document.body.addEventListener('htmx:afterSwap', function(){
     updateAllocChart();
     renderSimChart();
     updateHoldingsChart();
+    _updateDiscoverFiltersState();
+    // Reset category filter text when AI results reload
+    var catSel = document.querySelector('#discover-filters select[name="category"]');
+    if (catSel) catSel.value = '';
   });
   </script>
 </div>

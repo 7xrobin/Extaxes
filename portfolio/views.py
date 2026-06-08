@@ -439,6 +439,14 @@ def _generate_suggestions(profile, goals, filters=None):
     system_prompt = DISCOVER_SYSTEM_PROMPT.replace(
         "{CATEGORY_LIST}", ", ".join(catalog.category_names())
     )
+
+    strategy_allocation_text = ""
+    strategy_data = profile.approved_strategy_data or {}
+    cats = strategy_data.get("categories") or []
+    if cats:
+        lines = "\n".join(f"  - {c['name']}: {c['allocation_pct']}%" for c in cats)
+        strategy_allocation_text = f"\nApproved strategy allocation (set allocation_pct on each suggestion to match these targets):\n{lines}"
+
     user_context = f"""
 User profile:
 - Risk profile: {profile.risk_profile}
@@ -446,6 +454,7 @@ User profile:
 - Tax bracket: {profile.tax_bracket * 100:.0f}%
 - Married (double Sparerpauschbetrag): {profile.is_married}
 - Goals: {goals_text}
+{strategy_allocation_text}
 {_filter_instructions(filters)}
 
 Return a JSON object with key "suggestions" containing an array of exactly 6 suggestion objects.
